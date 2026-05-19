@@ -1,6 +1,6 @@
 "use client"
 
-import { Plug, CheckCircle, XCircle, AlertCircle } from "lucide-react"
+import { Plug, CheckCircle, XCircle, AlertCircle, Subtitles } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
@@ -44,13 +44,13 @@ export function ProvidersCard() {
   }
 
   const handleToggle = (providerId: string, enabled: boolean) => {
-    toggleProvider(providerId, enabled)
+    toggleProvider(providerId as "hianime" | "animekai" | "gogoanime" | "zoro", enabled)
   }
 
   const handleSelectProvider = (providerId: string) => {
     const provider = providers.find(p => p.id === providerId)
     if (provider?.enabled && provider.status !== "offline") {
-      setActiveProvider(providerId)
+      setActiveProvider(providerId as "hianime" | "animekai" | "gogoanime" | "zoro")
     }
   }
 
@@ -59,7 +59,7 @@ export function ProvidersCard() {
       <CardHeader className="pb-2">
         <CardTitle className="text-lg font-semibold flex items-center gap-2">
           <Plug className="w-5 h-5 text-primary" />
-          Provedores Instalados
+          Provedores de Streaming
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -84,9 +84,19 @@ export function ProvidersCard() {
                     </Badge>
                   )}
                 </div>
-                {provider.latency && (
-                  <p className="text-xs text-muted-foreground">{provider.latency}ms</p>
-                )}
+                <div className="flex items-center gap-2 mt-0.5">
+                  {provider.latency && (
+                    <p className="text-xs text-muted-foreground">{provider.latency}ms</p>
+                  )}
+                  {provider.hasSubtitles && (
+                    <div className="flex items-center gap-1">
+                      <Subtitles className="w-3 h-3 text-green-400" />
+                      <span className="text-xs text-green-400">
+                        {provider.languages.includes("Portuguese") ? "PT-BR" : "EN"}
+                      </span>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -102,12 +112,15 @@ export function ProvidersCard() {
           </div>
         ))}
 
-        {/* CORS Proxy Status */}
+        {/* Subtitle Info */}
         <div className="pt-2 border-t border-border">
           <div className="flex items-center justify-between text-xs">
-            <span className="text-muted-foreground">Proxy Status (CORS Bypassed)</span>
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Subtitles className="w-4 h-4" />
+              <span>Legendas PT-BR disponíveis</span>
+            </div>
             <Badge variant="outline" className="border-green-500/30 text-green-500 bg-green-500/10">
-              Ativo
+              HiAnime, AnimeKai
             </Badge>
           </div>
         </div>

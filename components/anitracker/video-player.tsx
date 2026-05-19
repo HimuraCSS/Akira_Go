@@ -300,7 +300,18 @@ export function VideoPlayer() {
             poster={currentEpisode?.thumbnail || "https://images.unsplash.com/photo-1578632767115-351597cf2477?w=1920&q=80"}
             playsInline
             crossOrigin="anonymous"
-          />
+          >
+            {/* Subtitle Track */}
+            {activeSubtitle && activeSubtitle.url && (
+              <track
+                kind="subtitles"
+                src={activeSubtitle.url}
+                srcLang={activeSubtitle.lang.toLowerCase().includes('portuguese') ? 'pt-BR' : 'en'}
+                label={activeSubtitle.lang}
+                default
+              />
+            )}
+          </video>
 
           {/* Current Source Indicator */}
           <div className={`absolute top-4 left-4 flex items-center gap-2 transition-opacity duration-300 ${showControls ? "opacity-100" : "opacity-0"}`}>
@@ -506,9 +517,81 @@ export function VideoPlayer() {
                 </DropdownMenu>
 
                 {/* Subtitles */}
-                <Button variant="ghost" size="icon" className="text-foreground hover:text-primary">
-                  <Subtitles className="w-5 h-5" />
-                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="sm" className={`text-foreground hover:text-primary gap-2 ${activeSubtitle ? "text-primary" : ""}`}>
+                      <Subtitles className="w-4 h-4" />
+                      <span className="text-xs hidden sm:inline">
+                        {activeSubtitle ? "PT-BR" : "Legenda"}
+                      </span>
+                      <ChevronDown className="w-3 h-3" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-64 bg-card border-border">
+                    <DropdownMenuLabel className="text-muted-foreground">
+                      Legendas
+                    </DropdownMenuLabel>
+                    <DropdownMenuSeparator className="bg-border" />
+                    <DropdownMenuItem
+                      className={`cursor-pointer ${!activeSubtitle ? "bg-primary/10 text-primary" : ""}`}
+                      onClick={() => setActiveSubtitle(null)}
+                    >
+                      <div className="flex items-center gap-2">
+                        <div className={`w-2 h-2 rounded-full ${!activeSubtitle ? "bg-primary" : "bg-muted"}`} />
+                        <span>Desativadas</span>
+                      </div>
+                    </DropdownMenuItem>
+                    {subtitles.length > 0 ? (
+                      <>
+                        {/* PT-BR first if available */}
+                        {subtitles.filter(s => 
+                          s.lang.toLowerCase().includes('portuguese') || 
+                          s.lang.toLowerCase().includes('pt')
+                        ).map((sub, index) => (
+                          <DropdownMenuItem
+                            key={`ptbr-${index}`}
+                            className={`cursor-pointer ${activeSubtitle?.url === sub.url ? "bg-primary/10 text-primary" : ""}`}
+                            onClick={() => setActiveSubtitle(sub)}
+                          >
+                            <div className="flex items-center justify-between w-full">
+                              <div className="flex items-center gap-2">
+                                <div className={`w-2 h-2 rounded-full ${activeSubtitle?.url === sub.url ? "bg-primary" : "bg-green-500"}`} />
+                                <span>{sub.lang}</span>
+                              </div>
+                              <Badge className="bg-green-500/20 text-green-400 border-none text-xs">
+                                PT-BR
+                              </Badge>
+                            </div>
+                          </DropdownMenuItem>
+                        ))}
+                        {/* Other languages */}
+                        {subtitles.filter(s => 
+                          !s.lang.toLowerCase().includes('portuguese') && 
+                          !s.lang.toLowerCase().includes('pt')
+                        ).slice(0, 5).map((sub, index) => (
+                          <DropdownMenuItem
+                            key={`sub-${index}`}
+                            className={`cursor-pointer ${activeSubtitle?.url === sub.url ? "bg-primary/10 text-primary" : ""}`}
+                            onClick={() => setActiveSubtitle(sub)}
+                          >
+                            <div className="flex items-center gap-2">
+                              <div className={`w-2 h-2 rounded-full ${activeSubtitle?.url === sub.url ? "bg-primary" : "bg-muted"}`} />
+                              <span>{sub.lang}</span>
+                            </div>
+                          </DropdownMenuItem>
+                        ))}
+                      </>
+                    ) : (
+                      <DropdownMenuItem disabled className="text-muted-foreground text-xs">
+                        {streamUrl ? "Nenhuma legenda disponível" : "Selecione um episódio primeiro"}
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuSeparator className="bg-border" />
+                    <div className="px-2 py-1.5 text-xs text-muted-foreground">
+                      {subtitles.length} legendas disponíveis
+                    </div>
+                  </DropdownMenuContent>
+                </DropdownMenu>
 
                 {/* Settings */}
                 <Button variant="ghost" size="icon" className="text-foreground hover:text-primary">
