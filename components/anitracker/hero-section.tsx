@@ -40,7 +40,7 @@ export function HeroSection({ anime, isLoading = false, onOpenAddons, onWatchNow
   // Use provided anime or fallback to default
   const displayAnime = anime ?? defaultFeaturedAnime
 
-  const isLoading = isBuffering || isLoadingEpisodes || isLoadingStream
+  const isStreamLoading = isBuffering || isLoadingEpisodes || isLoadingStream
 
   const handleWatchNow = async () => {
     // First load episodes for this anime
@@ -173,9 +173,9 @@ export function HeroSection({ anime, isLoading = false, onOpenAddons, onWatchNow
                 size="lg" 
                 className="glow-effect bg-primary hover:bg-primary/90 text-primary-foreground font-bold px-8 py-6 text-lg"
                 onClick={handleWatchNow}
-                disabled={isLoading}
+                disabled={isStreamLoading}
               >
-                {isLoading ? (
+                {isStreamLoading ? (
                   <>
                     <div className="w-5 h-5 mr-2 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
                     Carregando...
