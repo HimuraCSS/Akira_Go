@@ -121,7 +121,7 @@ export function ProvidersCard() {
               <span>Legendas PT-BR disponíveis</span>
             </div>
             <Badge variant="outline" className="border-green-500/30 text-green-500 bg-green-500/10">
-              Zoro
+              Zoro, Nyaa, NekoBT
             </Badge>
           </div>
         </div>
