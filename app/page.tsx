@@ -85,7 +85,7 @@ const continueWatchingList = [
 function AkiraGoContent() {
   const [addonsModalOpen, setAddonsModalOpen] = useState(false)
   const videoPlayerRef = useRef<HTMLDivElement>(null)
-  const { playEpisode } = useStreaming()
+  const { loadAnimeEpisodes, playEpisode } = useStreaming()
 
   // Fetch real data from Jikan API using SWR hooks
   const { 
@@ -106,7 +106,11 @@ function AkiraGoContent() {
     }, 100)
   }
 
-  const handlePlayAnime = (anime: AnimeData) => {
+  const handlePlayAnime = async (anime: AnimeData) => {
+    // Load episodes first
+    await loadAnimeEpisodes(anime.id, anime.title, anime.image)
+    
+    // Then play first episode
     const episode = {
       id: `${anime.id}-ep-1`,
       number: 1,
@@ -117,7 +121,7 @@ function AkiraGoContent() {
       animeTitle: anime.title,
     }
     
-    playEpisode(episode)
+    await playEpisode(episode)
     scrollToPlayer()
   }
 

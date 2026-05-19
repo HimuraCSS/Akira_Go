@@ -32,7 +32,7 @@ const defaultFeaturedAnime: AnimeData = {
 }
 
 export function HeroSection({ anime, isLoading = false, onOpenAddons, onWatchNow }: HeroSectionProps) {
-  const { playEpisode, providers, activeProvider, isBuffering } = useStreaming()
+  const { loadAnimeEpisodes, playEpisode, providers, activeProvider, isBuffering, isLoadingEpisodes, isLoadingStream } = useStreaming()
 
   const activeProviderData = providers.find(p => p.id === activeProvider)
   const activeSources = providers.filter(p => p.enabled && p.status !== "offline").length
@@ -40,7 +40,17 @@ export function HeroSection({ anime, isLoading = false, onOpenAddons, onWatchNow
   // Use provided anime or fallback to default
   const displayAnime = anime ?? defaultFeaturedAnime
 
-  const handleWatchNow = () => {
+  const isLoading = isBuffering || isLoadingEpisodes || isLoadingStream
+
+  const handleWatchNow = async () => {
+    // First load episodes for this anime
+    await loadAnimeEpisodes(
+      displayAnime.id, 
+      displayAnime.title,
+      displayAnime.image
+    )
+    
+    // Then play the first episode
     const episode = {
       id: `${displayAnime.id}-ep-1`,
       number: 1,
@@ -51,7 +61,7 @@ export function HeroSection({ anime, isLoading = false, onOpenAddons, onWatchNow
       animeTitle: displayAnime.title,
     }
     
-    playEpisode(episode)
+    await playEpisode(episode)
     onWatchNow()
   }
 
@@ -163,9 +173,9 @@ export function HeroSection({ anime, isLoading = false, onOpenAddons, onWatchNow
                 size="lg" 
                 className="glow-effect bg-primary hover:bg-primary/90 text-primary-foreground font-bold px-8 py-6 text-lg"
                 onClick={handleWatchNow}
-                disabled={isBuffering}
+                disabled={isLoading}
               >
-                {isBuffering ? (
+                {isLoading ? (
                   <>
                     <div className="w-5 h-5 mr-2 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
                     Carregando...
