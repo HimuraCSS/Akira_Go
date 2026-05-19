@@ -54,6 +54,7 @@ interface MALAuthContextType {
   user: MALUser | null
   isAuthenticated: boolean
   isLoading: boolean
+  error: string | null
   animeList: MALAnimeListItem[]
   isLoadingList: boolean
   login: () => void
@@ -61,6 +62,7 @@ interface MALAuthContextType {
   refreshUserData: () => Promise<void>
   fetchAnimeList: (status?: string) => Promise<void>
   updateAnimeStatus: (animeId: number, status: string, episodesWatched?: number, score?: number) => Promise<void>
+  clearError: () => void
 }
 
 const MALAuthContext = createContext<MALAuthContextType | null>(null)
@@ -97,91 +99,26 @@ const STORAGE_KEYS = {
 export function MALAuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<MALUser | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [animeList, setAnimeList] = useState<MALAnimeListItem[]>([])
   const [isLoadingList, setIsLoadingList] = useState(false)
 
   const isAuthenticated = !!user
 
-  // Check for existing session on mount
-  useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const storedUser = localStorage.getItem(STORAGE_KEYS.USER)
-        const accessToken = localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN)
-        const tokenExpires = localStorage.getItem(STORAGE_KEYS.TOKEN_EXPIRES)
+  const clearError = useCallback(() => setError(null), [])
 
-        if (storedUser && accessToken) {
-          // Check if token is expired
-          if (tokenExpires && Date.now() > parseInt(tokenExpires)) {
-            // Try to refresh token
-            await refreshToken()
-          } else {
-            setUser(JSON.parse(storedUser))
-          }
-        }
-      } catch (error) {
-        console.error("Error checking auth:", error)
-        logout()
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    checkAuth()
+  // Logout function - defined early for use in other functions
+  const logout = useCallback(() => {
+    localStorage.removeItem(STORAGE_KEYS.ACCESS_TOKEN)
+    localStorage.removeItem(STORAGE_KEYS.REFRESH_TOKEN)
+    localStorage.removeItem(STORAGE_KEYS.TOKEN_EXPIRES)
+    localStorage.removeItem(STORAGE_KEYS.USER)
+    setUser(null)
+    setAnimeList([])
   }, [])
 
-  // Handle OAuth callback
-  useEffect(() => {
-    const handleCallback = async () => {
-      const urlParams = new URLSearchParams(window.location.search)
-      const code = urlParams.get("code")
-      const state = urlParams.get("state")
-
-      if (code && state === "mal_auth") {
-        try {
-          setIsLoading(true)
-          const codeVerifier = localStorage.getItem(STORAGE_KEYS.CODE_VERIFIER)
-          
-          if (!codeVerifier) {
-            throw new Error("Code verifier not found")
-          }
-
-          // Exchange code for token
-          const response = await fetch("/api/auth/mal/token", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ code, codeVerifier }),
-          })
-
-          if (!response.ok) {
-            throw new Error("Failed to exchange code for token")
-          }
-
-          const data = await response.json()
-          
-          // Store tokens
-          localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, data.access_token)
-          localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, data.refresh_token)
-          localStorage.setItem(STORAGE_KEYS.TOKEN_EXPIRES, String(Date.now() + data.expires_in * 1000))
-
-          // Fetch user data
-          await refreshUserData()
-
-          // Clean URL
-          window.history.replaceState({}, document.title, window.location.pathname)
-        } catch (error) {
-          console.error("OAuth callback error:", error)
-        } finally {
-          setIsLoading(false)
-          localStorage.removeItem(STORAGE_KEYS.CODE_VERIFIER)
-        }
-      }
-    }
-
-    handleCallback()
-  }, [])
-
-  const refreshToken = async () => {
+  // Refresh token function
+  const refreshToken = useCallback(async () => {
     try {
       const refreshTokenValue = localStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN)
       if (!refreshTokenValue) throw new Error("No refresh token")
@@ -201,49 +138,13 @@ export function MALAuthProvider({ children }: { children: ReactNode }) {
 
       return data.access_token
     } catch (error) {
-      console.error("Token refresh error:", error)
+      console.error("[v0] Token refresh error:", error)
       logout()
       throw error
     }
-  }
+  }, [logout])
 
-  const login = useCallback(async () => {
-    try {
-      const clientId = process.env.NEXT_PUBLIC_MAL_CLIENT_ID
-      if (!clientId) {
-        console.error("MAL_CLIENT_ID not configured")
-        return
-      }
-
-      const codeVerifier = generateCodeVerifier()
-      const codeChallenge = await generateCodeChallenge(codeVerifier)
-      
-      localStorage.setItem(STORAGE_KEYS.CODE_VERIFIER, codeVerifier)
-
-      const redirectUri = `${window.location.origin}/api/auth/mal/callback`
-      const authUrl = new URL("https://myanimelist.net/v1/oauth2/authorize")
-      authUrl.searchParams.set("response_type", "code")
-      authUrl.searchParams.set("client_id", clientId)
-      authUrl.searchParams.set("redirect_uri", redirectUri)
-      authUrl.searchParams.set("code_challenge", codeChallenge)
-      authUrl.searchParams.set("code_challenge_method", "S256")
-      authUrl.searchParams.set("state", "mal_auth")
-
-      window.location.href = authUrl.toString()
-    } catch (error) {
-      console.error("Login error:", error)
-    }
-  }, [])
-
-  const logout = useCallback(() => {
-    localStorage.removeItem(STORAGE_KEYS.ACCESS_TOKEN)
-    localStorage.removeItem(STORAGE_KEYS.REFRESH_TOKEN)
-    localStorage.removeItem(STORAGE_KEYS.TOKEN_EXPIRES)
-    localStorage.removeItem(STORAGE_KEYS.USER)
-    setUser(null)
-    setAnimeList([])
-  }, [])
-
+  // Refresh user data function
   const refreshUserData = useCallback(async () => {
     try {
       const accessToken = localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN)
@@ -265,8 +166,147 @@ export function MALAuthProvider({ children }: { children: ReactNode }) {
       setUser(userData)
       localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(userData))
     } catch (error) {
-      console.error("Error fetching user data:", error)
+      console.error("[v0] Error fetching user data:", error)
       throw error
+    }
+  }, [refreshToken])
+
+  // Check for existing session on mount
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const storedUser = localStorage.getItem(STORAGE_KEYS.USER)
+        const accessToken = localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN)
+        const tokenExpires = localStorage.getItem(STORAGE_KEYS.TOKEN_EXPIRES)
+
+        if (storedUser && accessToken) {
+          // Check if token is expired
+          if (tokenExpires && Date.now() > parseInt(tokenExpires)) {
+            // Try to refresh token
+            await refreshToken()
+            await refreshUserData()
+          } else {
+            setUser(JSON.parse(storedUser))
+          }
+        }
+      } catch (error) {
+        console.error("[v0] Error checking auth:", error)
+        logout()
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    checkAuth()
+  }, [logout, refreshToken, refreshUserData])
+
+  // Handle OAuth callback
+  useEffect(() => {
+    const handleCallback = async () => {
+      const urlParams = new URLSearchParams(window.location.search)
+      const code = urlParams.get("code")
+      const state = urlParams.get("state")
+      const errorParam = urlParams.get("error")
+
+      // Handle error from MAL
+      if (errorParam) {
+        const errorDescription = urlParams.get("error_description") || "Erro desconhecido"
+        console.error("[v0] OAuth error:", errorParam, errorDescription)
+        setError(`Erro de autenticacao: ${errorDescription}`)
+        window.history.replaceState({}, document.title, window.location.pathname)
+        setIsLoading(false)
+        return
+      }
+
+      if (code && state === "mal_auth") {
+        try {
+          setIsLoading(true)
+          setError(null)
+          
+          const codeVerifier = localStorage.getItem(STORAGE_KEYS.CODE_VERIFIER)
+          
+          if (!codeVerifier) {
+            throw new Error("Code verifier not found. Please try logging in again.")
+          }
+
+          console.log("[v0] Exchanging code for token...")
+
+          // Exchange code for token
+          const response = await fetch("/api/auth/mal/token", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ code, codeVerifier }),
+          })
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}))
+            console.error("[v0] Token exchange failed:", errorData)
+            throw new Error(errorData.error || "Failed to exchange code for token")
+          }
+
+          const data = await response.json()
+          console.log("[v0] Token received successfully")
+          
+          // Store tokens
+          localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, data.access_token)
+          localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, data.refresh_token)
+          localStorage.setItem(STORAGE_KEYS.TOKEN_EXPIRES, String(Date.now() + data.expires_in * 1000))
+
+          // Fetch user data
+          await refreshUserData()
+
+          console.log("[v0] User authenticated successfully")
+
+          // Clean URL
+          window.history.replaceState({}, document.title, window.location.pathname)
+        } catch (error) {
+          console.error("[v0] OAuth callback error:", error)
+          setError(error instanceof Error ? error.message : "Erro ao fazer login")
+        } finally {
+          setIsLoading(false)
+          localStorage.removeItem(STORAGE_KEYS.CODE_VERIFIER)
+        }
+      }
+    }
+
+    handleCallback()
+  }, [refreshUserData])
+
+  const login = useCallback(async () => {
+    try {
+      setError(null)
+      const clientId = process.env.NEXT_PUBLIC_MAL_CLIENT_ID
+      
+      if (!clientId) {
+        setError("Credenciais do MyAnimeList nao configuradas. Entre em contato com o administrador.")
+        console.error("[v0] MAL_CLIENT_ID not configured")
+        return
+      }
+
+      console.log("[v0] Starting OAuth flow...")
+
+      const codeVerifier = generateCodeVerifier()
+      const codeChallenge = await generateCodeChallenge(codeVerifier)
+      
+      localStorage.setItem(STORAGE_KEYS.CODE_VERIFIER, codeVerifier)
+
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin
+      const redirectUri = `${appUrl}/api/auth/mal/callback`
+      
+      console.log("[v0] Redirect URI:", redirectUri)
+      
+      const authUrl = new URL("https://myanimelist.net/v1/oauth2/authorize")
+      authUrl.searchParams.set("response_type", "code")
+      authUrl.searchParams.set("client_id", clientId)
+      authUrl.searchParams.set("redirect_uri", redirectUri)
+      authUrl.searchParams.set("code_challenge", codeChallenge)
+      authUrl.searchParams.set("code_challenge_method", "S256")
+      authUrl.searchParams.set("state", "mal_auth")
+
+      window.location.href = authUrl.toString()
+    } catch (error) {
+      console.error("[v0] Login error:", error)
+      setError("Erro ao iniciar login. Tente novamente.")
     }
   }, [])
 
@@ -296,11 +336,11 @@ export function MALAuthProvider({ children }: { children: ReactNode }) {
       const data = await response.json()
       setAnimeList(data.data || [])
     } catch (error) {
-      console.error("Error fetching anime list:", error)
+      console.error("[v0] Error fetching anime list:", error)
     } finally {
       setIsLoadingList(false)
     }
-  }, [])
+  }, [refreshToken])
 
   const updateAnimeStatus = useCallback(async (
     animeId: number, 
@@ -332,10 +372,10 @@ export function MALAuthProvider({ children }: { children: ReactNode }) {
       // Refresh list after update
       await fetchAnimeList()
     } catch (error) {
-      console.error("Error updating anime status:", error)
+      console.error("[v0] Error updating anime status:", error)
       throw error
     }
-  }, [fetchAnimeList])
+  }, [fetchAnimeList, refreshToken])
 
   return (
     <MALAuthContext.Provider
@@ -343,6 +383,7 @@ export function MALAuthProvider({ children }: { children: ReactNode }) {
         user,
         isAuthenticated,
         isLoading,
+        error,
         animeList,
         isLoadingList,
         login,
@@ -350,6 +391,7 @@ export function MALAuthProvider({ children }: { children: ReactNode }) {
         refreshUserData,
         fetchAnimeList,
         updateAnimeStatus,
+        clearError,
       }}
     >
       {children}
