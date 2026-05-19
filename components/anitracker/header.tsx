@@ -1,6 +1,7 @@
 "use client"
 
-import { Zap, Menu, Search, Bell, User } from "lucide-react"
+import { Menu, Search, Bell, User } from "lucide-react"
+import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -16,11 +17,15 @@ export function Header() {
               <Menu className="w-5 h-5" />
             </Button>
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-                <Zap className="w-5 h-5 text-primary-foreground" />
-              </div>
+              <Image
+                src="/logo.png"
+                alt="AKIRA Go"
+                width={40}
+                height={40}
+                className="w-10 h-10 object-contain"
+              />
               <span className="text-xl font-bold text-foreground">
-                Ani<span className="text-primary">Tracker</span>
+                AKIRA <span className="text-primary">Go</span>
               </span>
             </div>
           </div>

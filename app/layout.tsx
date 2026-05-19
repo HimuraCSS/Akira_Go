@@ -7,7 +7,7 @@ const _geist = Geist({ subsets: ["latin"] });
 const _geistMono = Geist_Mono({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'AniTracker - Premium Anime Streaming Dashboard',
+  title: 'AKIRA Go - Premium Anime Streaming Dashboard',
   description: 'Track, discover, and stream your favorite anime with multiple providers',
   generator: 'v0.app',
   icons: {
