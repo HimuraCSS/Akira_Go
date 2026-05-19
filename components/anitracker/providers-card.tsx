@@ -4,12 +4,13 @@ import { Plug, CheckCircle, XCircle, AlertCircle, Subtitles } from "lucide-react
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
-import { useStreaming } from "./streaming-context"
+import { useStreaming, type Provider } from "./streaming-context"
+import type { ConsumetProvider } from "@/lib/consumet-api"
 
 export function ProvidersCard() {
   const { providers, activeProvider, setActiveProvider, toggleProvider } = useStreaming()
 
-  const getStatusIcon = (status: "online" | "offline" | "degraded") => {
+  const getStatusIcon = (status: Provider["status"]) => {
     switch (status) {
       case "online":
         return <CheckCircle className="w-4 h-4 text-green-500" />
@@ -20,7 +21,7 @@ export function ProvidersCard() {
     }
   }
 
-  const getStatusBadge = (status: "online" | "offline" | "degraded") => {
+  const getStatusBadge = (status: Provider["status"]) => {
     switch (status) {
       case "online":
         return (
@@ -44,13 +45,13 @@ export function ProvidersCard() {
   }
 
   const handleToggle = (providerId: string, enabled: boolean) => {
-    toggleProvider(providerId as "hianime" | "animekai" | "gogoanime" | "zoro", enabled)
+    toggleProvider(providerId as ConsumetProvider, enabled)
   }
 
   const handleSelectProvider = (providerId: string) => {
     const provider = providers.find(p => p.id === providerId)
     if (provider?.enabled && provider.status !== "offline") {
-      setActiveProvider(providerId as "hianime" | "animekai" | "gogoanime" | "zoro")
+      setActiveProvider(providerId as ConsumetProvider)
     }
   }
 
@@ -120,7 +121,7 @@ export function ProvidersCard() {
               <span>Legendas PT-BR disponíveis</span>
             </div>
             <Badge variant="outline" className="border-green-500/30 text-green-500 bg-green-500/10">
-              HiAnime, AnimeKai
+              Zoro
             </Badge>
           </div>
         </div>

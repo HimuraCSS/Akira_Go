@@ -104,6 +104,8 @@ const defaultProviders: Provider[] = [
     status: PROVIDER_INFO.gogoanime.status, 
     enabled: true, 
     latency: 45,
+    hasSubtitles: false,
+    languages: ["English"],
   },
   { 
     id: "zoro", 
@@ -111,6 +113,8 @@ const defaultProviders: Provider[] = [
     status: PROVIDER_INFO.zoro.status, 
     enabled: true, 
     latency: 120,
+    hasSubtitles: true,
+    languages: ["English", "Portuguese", "Spanish"],
   },
   { 
     id: "animefox", 
@@ -118,6 +122,8 @@ const defaultProviders: Provider[] = [
     status: PROVIDER_INFO.animefox.status, 
     enabled: false, 
     latency: 200,
+    hasSubtitles: false,
+    languages: ["English"],
   },
   { 
     id: "animepahe", 
@@ -125,6 +131,8 @@ const defaultProviders: Provider[] = [
     status: PROVIDER_INFO.animepahe.status, 
     enabled: false, 
     latency: 180,
+    hasSubtitles: false,
+    languages: ["English"],
   },
 ]
 
@@ -145,6 +153,8 @@ export function StreamingProvider({ children }: { children: ReactNode }) {
     isLoadingEpisodes: false,
     isLoadingStream: false,
     error: null,
+    subtitles: [],
+    activeSubtitle: null,
   })
 
   const setActiveProvider = useCallback((providerId: ConsumetProvider) => {
@@ -357,6 +367,10 @@ export function StreamingProvider({ children }: { children: ReactNode }) {
     setState(prev => ({ ...prev, error: null }))
   }, [])
 
+  const setActiveSubtitle = useCallback((subtitle: Subtitle | null) => {
+    setState(prev => ({ ...prev, activeSubtitle: subtitle }))
+  }, [])
+
   return (
     <StreamingContext.Provider value={{
       ...state,
@@ -370,6 +384,7 @@ export function StreamingProvider({ children }: { children: ReactNode }) {
       setIsBuffering,
       setHlsReady,
       clearError,
+      setActiveSubtitle,
     }}>
       {children}
     </StreamingContext.Provider>
