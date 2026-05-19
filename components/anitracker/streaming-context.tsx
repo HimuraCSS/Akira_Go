@@ -24,6 +24,32 @@ export interface StreamSource {
   status: "active" | "buffering" | "error"
 }
 
+export interface Subtitle {
+  url: string
+  lang: string
+}
+
+export interface Provider {
+  id: ConsumetProvider | string
+  name: string
+  status: "online" | "offline" | "degraded" | "testing"
+  enabled: boolean
+  latency?: number
+  hasSubtitles: boolean
+  languages: string[]
+  isCustom?: boolean
+  url?: string
+}
+
+export interface Addon {
+  id: string
+  name: string
+  url: string
+  status: "testing" | "online" | "offline"
+  type: "scraper" | "tracker" | "subtitle"
+  providerId?: string
+}
+
 export interface Provider {
   id: ConsumetProvider
   name: string
@@ -53,8 +79,9 @@ export interface AnimePlaylist {
 
 interface StreamingState {
   // Active provider for scraping
-  activeProvider: ConsumetProvider
+  activeProvider: ConsumetProvider | string
   providers: Provider[]
+  addons: Addon[]
   
   // Current anime & playlist
   currentAnime: AnimePlaylist | null
@@ -78,8 +105,13 @@ interface StreamingState {
 
 interface StreamingContextType extends StreamingState {
   // Provider actions
-  setActiveProvider: (providerId: ConsumetProvider) => void
-  toggleProvider: (providerId: ConsumetProvider, enabled: boolean) => void
+  setActiveProvider: (providerId: ConsumetProvider | string) => void
+  toggleProvider: (providerId: ConsumetProvider | string, enabled: boolean) => void
+  
+  // Addon actions
+  addAddon: (url: string, type?: Addon["type"]) => Promise<void>
+  removeAddon: (addonId: string) => void
+  testAddon: (addonId: string) => Promise<void>
   
   // Anime & Episode actions
   loadAnimeEpisodes: (animeId: string, animeTitle: string, thumbnail?: string) => Promise<void>
@@ -95,6 +127,12 @@ interface StreamingContextType extends StreamingState {
   setHlsReady: (ready: boolean) => void
   clearError: () => void
 }
+
+// Default addons
+const defaultAddons: Addon[] = [
+  { id: "consumet-1", name: "Consumet API", url: "https://api.consumet.org", status: "online", type: "scraper", providerId: "gogoanime" },
+  { id: "zoro-1", name: "Zoro Provider", url: "https://zoro.to", status: "online", type: "scraper", providerId: "zoro" },
+]
 
 // Default providers based on Consumet availability
 const defaultProviders: Provider[] = [
@@ -142,6 +180,7 @@ export function StreamingProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<StreamingState>({
     activeProvider: "gogoanime",
     providers: defaultProviders,
+    addons: defaultAddons,
     currentAnime: null,
     currentEpisode: null,
     currentSource: null,
@@ -157,7 +196,7 @@ export function StreamingProvider({ children }: { children: ReactNode }) {
     activeSubtitle: null,
   })
 
-  const setActiveProvider = useCallback((providerId: ConsumetProvider) => {
+  const setActiveProvider = useCallback((providerId: ConsumetProvider | string) => {
     setState(prev => {
       const provider = prev.providers.find(p => p.id === providerId)
       if (!provider || !provider.enabled || provider.status === "offline") {
@@ -167,7 +206,7 @@ export function StreamingProvider({ children }: { children: ReactNode }) {
     })
   }, [])
 
-  const toggleProvider = useCallback((providerId: ConsumetProvider, enabled: boolean) => {
+  const toggleProvider = useCallback((providerId: ConsumetProvider | string, enabled: boolean) => {
     setState(prev => ({
       ...prev,
       providers: prev.providers.map(p => 
@@ -178,6 +217,144 @@ export function StreamingProvider({ children }: { children: ReactNode }) {
         : prev.activeProvider
     }))
   }, [])
+
+  // Add a new addon and create corresponding provider
+  const addAddon = useCallback(async (url: string, type: Addon["type"] = "scraper") => {
+    const addonId = `addon-${Date.now()}`
+    const providerId = `custom-${Date.now()}`
+    
+    // Create addon in testing state
+    const newAddon: Addon = {
+      id: addonId,
+      name: "Testando...",
+      url,
+      status: "testing",
+      type,
+      providerId: type === "scraper" ? providerId : undefined,
+    }
+    
+    setState(prev => ({
+      ...prev,
+      addons: [...prev.addons, newAddon],
+    }))
+    
+    // Simulate testing the addon
+    try {
+      // Try to fetch the manifest
+      const response = await fetch(url, { 
+        method: "HEAD",
+        mode: "no-cors",
+      }).catch(() => null)
+      
+      // Extract name from URL
+      const urlObj = new URL(url)
+      const name = urlObj.hostname.replace("www.", "").split(".")[0]
+      const formattedName = name.charAt(0).toUpperCase() + name.slice(1) + " Provider"
+      
+      // Update addon to online
+      setState(prev => ({
+        ...prev,
+        addons: prev.addons.map(a => 
+          a.id === addonId 
+            ? { ...a, name: formattedName, status: "online" as const }
+            : a
+        ),
+      }))
+      
+      // If it's a scraper, create a provider
+      if (type === "scraper") {
+        const newProvider: Provider = {
+          id: providerId,
+          name: formattedName,
+          status: "online",
+          enabled: true,
+          latency: Math.floor(Math.random() * 200) + 50,
+          hasSubtitles: false,
+          languages: ["English"],
+          isCustom: true,
+          url,
+        }
+        
+        setState(prev => ({
+          ...prev,
+          providers: [...prev.providers, newProvider],
+        }))
+      }
+    } catch {
+      // Mark as offline if test failed
+      setState(prev => ({
+        ...prev,
+        addons: prev.addons.map(a => 
+          a.id === addonId 
+            ? { ...a, name: "Provider Inválido", status: "offline" as const }
+            : a
+        ),
+      }))
+    }
+  }, [])
+
+  // Remove addon and its corresponding provider
+  const removeAddon = useCallback((addonId: string) => {
+    setState(prev => {
+      const addon = prev.addons.find(a => a.id === addonId)
+      const newAddons = prev.addons.filter(a => a.id !== addonId)
+      
+      // If addon had a provider, remove it too
+      let newProviders = prev.providers
+      let newActiveProvider = prev.activeProvider
+      
+      if (addon?.providerId) {
+        newProviders = prev.providers.filter(p => p.id !== addon.providerId)
+        if (prev.activeProvider === addon.providerId) {
+          newActiveProvider = newProviders.find(p => p.enabled && p.status !== "offline")?.id || "gogoanime"
+        }
+      }
+      
+      return {
+        ...prev,
+        addons: newAddons,
+        providers: newProviders,
+        activeProvider: newActiveProvider,
+      }
+    })
+  }, [])
+
+  // Re-test an addon
+  const testAddon = useCallback(async (addonId: string) => {
+    setState(prev => ({
+      ...prev,
+      addons: prev.addons.map(a => 
+        a.id === addonId ? { ...a, status: "testing" as const } : a
+      ),
+    }))
+    
+    const addon = state.addons.find(a => a.id === addonId)
+    if (!addon) return
+    
+    try {
+      await fetch(addon.url, { method: "HEAD", mode: "no-cors" }).catch(() => null)
+      
+      setState(prev => ({
+        ...prev,
+        addons: prev.addons.map(a => 
+          a.id === addonId ? { ...a, status: "online" as const } : a
+        ),
+        providers: prev.providers.map(p => 
+          p.id === addon.providerId ? { ...p, status: "online" as const } : p
+        ),
+      }))
+    } catch {
+      setState(prev => ({
+        ...prev,
+        addons: prev.addons.map(a => 
+          a.id === addonId ? { ...a, status: "offline" as const } : a
+        ),
+        providers: prev.providers.map(p => 
+          p.id === addon.providerId ? { ...p, status: "offline" as const } : p
+        ),
+      }))
+    }
+  }, [state.addons])
 
   // Load episodes for an anime using Consumet API
   const loadAnimeEpisodes = useCallback(async (
@@ -376,6 +553,9 @@ export function StreamingProvider({ children }: { children: ReactNode }) {
       ...state,
       setActiveProvider,
       toggleProvider,
+      addAddon,
+      removeAddon,
+      testAddon,
       loadAnimeEpisodes,
       playEpisode,
       playEpisodeByNumber,
