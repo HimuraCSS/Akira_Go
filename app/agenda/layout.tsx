@@ -3,7 +3,7 @@
 import { MALAuthProvider } from "@/components/anitracker/mal-auth-context"
 import { StreamingProvider } from "@/components/anitracker/streaming-context"
 
-export default function MinhaListaLayout({
+export default function AgendaLayout({
   children,
 }: {
   children: React.ReactNode
