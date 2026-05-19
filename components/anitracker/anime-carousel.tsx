@@ -12,6 +12,7 @@ interface AnimeCarouselProps {
   isLoading?: boolean
   onPlayAnime?: (anime: AnimeData) => void
   onAnimeInfo?: (anime: AnimeData) => void
+  sectionId?: string // Unique section identifier to prevent duplicate keys across sections
 }
 
 // Default data for when no props are provided
@@ -97,6 +98,7 @@ export function AnimeCarousel({
   isLoading = false,
   onPlayAnime,
   onAnimeInfo,
+  sectionId = "default",
 }: AnimeCarouselProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null)
   
@@ -148,9 +150,9 @@ export function AnimeCarousel({
         {/* Anime Grid */}
         {!isLoading && !isEmpty && (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-            {displayAnimes.map((anime) => (
+            {displayAnimes.map((anime, index) => (
               <AnimeCard
-                key={anime.id}
+                key={`${sectionId}-${anime.id}-${index}`}
                 anime={anime}
                 isHovered={hoveredId === anime.id}
                 onHover={setHoveredId}

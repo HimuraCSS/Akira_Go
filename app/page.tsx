@@ -173,6 +173,7 @@ function AkiraGoContent() {
             isLoading={isLoading}
             onPlayAnime={handlePlayAnime}
             onAnimeInfo={handleAnimeInfo}
+            sectionId="trending"
           />
         </Suspense>
 
@@ -185,6 +186,7 @@ function AkiraGoContent() {
             isLoading={isLoading}
             onPlayAnime={handlePlayAnime}
             onAnimeInfo={handleAnimeInfo}
+            sectionId="airing"
           />
         </Suspense>
 
@@ -213,6 +215,7 @@ function AkiraGoContent() {
             isLoading={isLoading}
             onPlayAnime={handlePlayAnime}
             onAnimeInfo={handleAnimeInfo}
+            sectionId="popular"
           />
         </Suspense>
 
@@ -225,6 +228,7 @@ function AkiraGoContent() {
             isLoading={isLoadingTopRated}
             onPlayAnime={handlePlayAnime}
             onAnimeInfo={handleAnimeInfo}
+            sectionId="top-rated"
           />
         </Suspense>
 
@@ -237,6 +241,7 @@ function AkiraGoContent() {
             isLoading={isLoading}
             onPlayAnime={handlePlayAnime}
             onAnimeInfo={handleAnimeInfo}
+            sectionId="upcoming"
           />
         </Suspense>
 
