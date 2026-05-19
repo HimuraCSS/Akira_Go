@@ -6,6 +6,12 @@ import { Header } from "@/components/anitracker/header"
 import { HeroSection } from "@/components/anitracker/hero-section"
 import { StreamingProvider, useStreaming } from "@/components/anitracker/streaming-context"
 import type { AnimeData } from "@/components/anitracker/anime-card"
+import { 
+  trendingAnimeList, 
+  continueWatchingList, 
+  fetchFeaturedAnime, 
+  fetchTrendingAnimes 
+} from "@/lib/anime-data"
 
 // Lazy load components below the fold for better initial load performance
 const StatsCard = lazy(() => import("@/components/anitracker/stats-card").then(m => ({ default: m.StatsCard })))
@@ -44,133 +50,49 @@ function SectionSkeleton() {
   )
 }
 
-// Simulated API data - Replace with real API calls
-const mockFeaturedAnime: AnimeData = {
-  id: "cyberpunk-edgerunners",
-  title: "Cyberpunk: Edgerunners",
-  japaneseTitle: "サイバーパンク エッジランナーズ",
-  image: "https://images.unsplash.com/photo-1578632767115-351597cf2477?w=400&q=80",
-  bannerImage: "https://images.unsplash.com/photo-1578632767115-351597cf2477?w=1920&q=80",
-  score: 9.1,
-  episodes: 10,
-  status: "Completed",
-  synopsis: "Em uma distopia dominada por corporações e obsessão por tecnologia, um jovem delinquente de rua tenta sobreviver em Night City, uma cidade que vive da modificação corporal.",
-  genres: ["Ação", "Sci-Fi", "Cyberpunk"],
-  year: 2022,
-  studio: "Studio Trigger",
-  duration: "24min/ep",
-}
-
-const mockTrendingAnimes: AnimeData[] = [
-  {
-    id: "1",
-    title: "Solo Leveling",
-    japaneseTitle: "俺だけレベルアップな件",
-    image: "https://images.unsplash.com/photo-1612036782180-6f0b6cd846fe?w=400&q=80",
-    score: 8.9,
-    episodes: 12,
-    status: "Airing",
-    synopsis: "Após ser despertado com poderes únicos, o caçador mais fraco de todos se torna o mais forte...",
-    genres: ["Ação", "Fantasia"],
-    year: 2024,
-  },
-  {
-    id: "2",
-    title: "Demon Slayer",
-    japaneseTitle: "鬼滅の刃",
-    image: "https://images.unsplash.com/photo-1578632767115-351597cf2477?w=400&q=80",
-    score: 9.2,
-    episodes: 26,
-    status: "Completed",
-    synopsis: "Tanjiro busca vingança contra os demônios que destruíram sua família...",
-    genres: ["Ação", "Sobrenatural"],
-    year: 2019,
-  },
-  {
-    id: "3",
-    title: "Jujutsu Kaisen",
-    japaneseTitle: "呪術廻戦",
-    image: "https://images.unsplash.com/photo-1614583225154-5fcdda07019e?w=400&q=80",
-    score: 8.7,
-    episodes: 24,
-    status: "Completed",
-    synopsis: "Yuji Itadori se junta à luta contra maldições sobrenaturais...",
-    genres: ["Ação", "Horror"],
-    year: 2020,
-  },
-  {
-    id: "4",
-    title: "Attack on Titan",
-    japaneseTitle: "進撃の巨人",
-    image: "https://images.unsplash.com/photo-1601850494422-3cf14624b0b3?w=400&q=80",
-    score: 9.5,
-    episodes: 87,
-    status: "Completed",
-    synopsis: "A humanidade luta pela sobrevivência contra gigantes devoradores...",
-    genres: ["Ação", "Drama"],
-    year: 2013,
-  },
-  {
-    id: "5",
-    title: "My Hero Academia",
-    japaneseTitle: "僕のヒーローアカデミア",
-    image: "https://images.unsplash.com/photo-1560169897-fc0cdbdfa4d5?w=400&q=80",
-    score: 8.4,
-    episodes: 138,
-    status: "Airing",
-    synopsis: "Em um mundo de super-heróis, um garoto sem poderes sonha em se tornar o maior...",
-    genres: ["Ação", "Escolar"],
-    year: 2016,
-  },
-  {
-    id: "6",
-    title: "Chainsaw Man",
-    japaneseTitle: "チェンソーマン",
-    image: "https://images.unsplash.com/photo-1618336753974-aae8e04506aa?w=400&q=80",
-    score: 8.8,
-    episodes: 12,
-    status: "Completed",
-    synopsis: "Denji se funde com seu demônio motosserra para caçar demônios...",
-    genres: ["Ação", "Horror"],
-    year: 2022,
-  },
-]
-
-const continueWatchingData = [
-  { id: "cw-1", title: "Cyberpunk: Edgerunners", episode: 8, progress: 65, image: "https://images.unsplash.com/photo-1578632767115-351597cf2477?w=400&q=80" },
-  { id: "cw-2", title: "Solo Leveling", episode: 5, progress: 30, image: "https://images.unsplash.com/photo-1612036782180-6f0b6cd846fe?w=400&q=80" },
-  { id: "cw-3", title: "Demon Slayer S4", episode: 3, progress: 80, image: "https://images.unsplash.com/photo-1614583225154-5fcdda07019e?w=400&q=80" },
-  { id: "cw-4", title: "Jujutsu Kaisen", episode: 12, progress: 45, image: "https://images.unsplash.com/photo-1601850494422-3cf14624b0b3?w=400&q=80" },
-]
-
 function AniTrackerContent() {
   const [addonsModalOpen, setAddonsModalOpen] = useState(false)
   const videoPlayerRef = useRef<HTMLDivElement>(null)
   const { playEpisode } = useStreaming()
 
-  // Simulated loading states - Replace with real data fetching
+  // Dynamic data states
   const [featuredAnime, setFeaturedAnime] = useState<AnimeData | null>(null)
   const [trendingAnimes, setTrendingAnimes] = useState<AnimeData[]>([])
   const [isLoadingFeatured, setIsLoadingFeatured] = useState(true)
   const [isLoadingTrending, setIsLoadingTrending] = useState(true)
 
-  // Simulate data fetching
+  // Fetch data from centralized database
   useEffect(() => {
-    // Simulate API delay for featured anime
-    const featuredTimer = setTimeout(() => {
-      setFeaturedAnime(mockFeaturedAnime)
-      setIsLoadingFeatured(false)
-    }, 800)
+    let mounted = true
 
-    // Simulate API delay for trending animes
-    const trendingTimer = setTimeout(() => {
-      setTrendingAnimes(mockTrendingAnimes)
-      setIsLoadingTrending(false)
-    }, 1200)
+    async function loadData() {
+      try {
+        const featured = await fetchFeaturedAnime()
+        if (mounted) {
+          setFeaturedAnime(featured)
+          setIsLoadingFeatured(false)
+        }
+      } catch (error) {
+        console.error("Failed to fetch featured anime:", error)
+        if (mounted) setIsLoadingFeatured(false)
+      }
+
+      try {
+        const trending = await fetchTrendingAnimes()
+        if (mounted) {
+          setTrendingAnimes(trending)
+          setIsLoadingTrending(false)
+        }
+      } catch (error) {
+        console.error("Failed to fetch trending animes:", error)
+        if (mounted) setIsLoadingTrending(false)
+      }
+    }
+
+    loadData()
 
     return () => {
-      clearTimeout(featuredTimer)
-      clearTimeout(trendingTimer)
+      mounted = false
     }
   }, [])
 
@@ -196,7 +118,6 @@ function AniTrackerContent() {
   }
 
   const handleAnimeInfo = (anime: AnimeData) => {
-    // Could open a modal or navigate to detail page
     console.log("Info for:", anime.title)
   }
 
@@ -246,6 +167,18 @@ function AniTrackerContent() {
           />
         </Suspense>
 
+        {/* New Releases Section */}
+        <Suspense fallback={<SectionSkeleton />}>
+          <AnimeCarousel 
+            title="Lançamentos 2024"
+            subtitle="As estreias mais aguardadas do ano"
+            animes={trendingAnimes.filter(a => a.year === 2024)}
+            isLoading={isLoadingTrending}
+            onPlayAnime={handlePlayAnime}
+            onAnimeInfo={handleAnimeInfo}
+          />
+        </Suspense>
+
         {/* Video Player Section - Lazy loaded */}
         <div ref={videoPlayerRef}>
           <Suspense fallback={
@@ -261,6 +194,18 @@ function AniTrackerContent() {
 
         {/* Continue Watching Section */}
         <ContinueWatchingSection />
+
+        {/* Top Rated Section */}
+        <Suspense fallback={<SectionSkeleton />}>
+          <AnimeCarousel 
+            title="Mais Bem Avaliados"
+            subtitle="Obras-primas com notas acima de 8.5"
+            animes={trendingAnimes.filter(a => a.score >= 8.5).sort((a, b) => b.score - a.score)}
+            isLoading={isLoadingTrending}
+            onPlayAnime={handlePlayAnime}
+            onAnimeInfo={handleAnimeInfo}
+          />
+        </Suspense>
 
         {/* Footer */}
         <footer className="py-8 border-t border-border">
@@ -310,7 +255,7 @@ function ContinueWatchingSection() {
         </div>
         
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {continueWatchingData.map((anime) => (
+          {continueWatchingList.map((anime) => (
             <ContinueWatchingCard key={anime.id} anime={anime} />
           ))}
         </div>
@@ -319,7 +264,16 @@ function ContinueWatchingSection() {
   )
 }
 
-function ContinueWatchingCard({ anime }: { anime: typeof continueWatchingData[0] }) {
+interface ContinueWatchingAnime {
+  id: string
+  title: string
+  episode: number
+  progress: number
+  image: string
+  nextEpisodeTitle: string
+}
+
+function ContinueWatchingCard({ anime }: { anime: ContinueWatchingAnime }) {
   return (
     <div className="group relative glass-card rounded-lg overflow-hidden border border-border hover:border-primary/50 transition-all cursor-pointer">
       <div className="aspect-video relative">
@@ -345,11 +299,12 @@ function ContinueWatchingCard({ anime }: { anime: typeof continueWatchingData[0]
       <div className="p-3">
         <h3 className="text-sm font-medium text-foreground truncate">{anime.title}</h3>
         <p className="text-xs text-muted-foreground">EP {anime.episode} • {anime.progress}% assistido</p>
+        <p className="text-xs text-muted-foreground/70 truncate mt-1">{anime.nextEpisodeTitle}</p>
       </div>
 
       {/* Play overlay on hover */}
       <div className="absolute inset-0 bg-background/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-        <div className="w-12 h-12 rounded-full bg-primary flex items-center justify-center">
+        <div className="w-12 h-12 rounded-full bg-primary flex items-center justify-center shadow-lg shadow-primary/25">
           <svg className="w-5 h-5 text-primary-foreground ml-1" fill="currentColor" viewBox="0 0 24 24">
             <path d="M8 5v14l11-7z" />
           </svg>
