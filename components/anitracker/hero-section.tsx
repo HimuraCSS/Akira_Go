@@ -4,12 +4,35 @@ import Image from "next/image"
 import { Play, Settings, Star, Calendar, Tv, Clock } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { useStreaming } from "./streaming-context"
 
 interface HeroSectionProps {
   onOpenAddons: () => void
+  onWatchNow: () => void
 }
 
-export function HeroSection({ onOpenAddons }: HeroSectionProps) {
+export function HeroSection({ onOpenAddons, onWatchNow }: HeroSectionProps) {
+  const { playEpisode, providers, activeProvider, isBuffering } = useStreaming()
+
+  const activeProviderData = providers.find(p => p.id === activeProvider)
+  const activeSources = providers.filter(p => p.enabled && p.status !== "offline").length
+
+  const handleWatchNow = () => {
+    // Create episode data and trigger playback
+    const episode = {
+      id: "cyberpunk-ep-8",
+      number: 8,
+      title: "Humanity",
+      thumbnail: "https://images.unsplash.com/photo-1578632767115-351597cf2477?w=400&q=80",
+      duration: "24:00",
+      animeId: "cyberpunk-edgerunners",
+      animeTitle: "Cyberpunk: Edgerunners",
+    }
+    
+    playEpisode(episode)
+    onWatchNow()
+  }
+
   return (
     <section className="relative w-full h-[70vh] min-h-[500px] overflow-hidden">
       {/* Background Image with Overlay - Optimized with Next/Image priority for LCP */}
@@ -73,9 +96,20 @@ export function HeroSection({ onOpenAddons }: HeroSectionProps) {
               <Button 
                 size="lg" 
                 className="glow-effect bg-primary hover:bg-primary/90 text-primary-foreground font-bold px-8 py-6 text-lg"
+                onClick={handleWatchNow}
+                disabled={isBuffering}
               >
-                <Play className="w-5 h-5 mr-2 fill-current" />
-                Assistir Agora
+                {isBuffering ? (
+                  <>
+                    <div className="w-5 h-5 mr-2 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
+                    Carregando...
+                  </>
+                ) : (
+                  <>
+                    <Play className="w-5 h-5 mr-2 fill-current" />
+                    Assistir Agora
+                  </>
+                )}
               </Button>
               <Button 
                 size="lg" 
@@ -88,15 +122,17 @@ export function HeroSection({ onOpenAddons }: HeroSectionProps) {
               </Button>
             </div>
 
-            {/* Quick Stats */}
+            {/* Quick Stats - Now Dynamic */}
             <div className="flex gap-6 pt-4 text-sm">
               <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                <span className="text-muted-foreground">3 Fontes Ativas</span>
+                <div className={`w-2 h-2 rounded-full ${activeSources > 0 ? "bg-green-500 animate-pulse" : "bg-destructive"}`} />
+                <span className="text-muted-foreground">{activeSources} Fontes Ativas</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-primary" />
-                <span className="text-muted-foreground">HLS Ready</span>
+                <span className="text-muted-foreground">
+                  {activeProviderData ? `${activeProviderData.name}` : "Nenhum Provedor"}
+                </span>
               </div>
             </div>
           </div>

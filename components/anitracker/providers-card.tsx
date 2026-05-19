@@ -4,24 +4,12 @@ import { Plug, CheckCircle, XCircle, AlertCircle } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
-
-interface Provider {
-  id: string
-  name: string
-  status: "online" | "offline" | "degraded"
-  enabled: boolean
-  latency?: number
-}
-
-const providers: Provider[] = [
-  { id: "consumet", name: "Consumet API", status: "online", enabled: true, latency: 45 },
-  { id: "gogoanime", name: "GogoAnime", status: "online", enabled: true, latency: 120 },
-  { id: "zoro", name: "Zoro/Anicrush", status: "degraded", enabled: true, latency: 250 },
-  { id: "animepahe", name: "AnimePahe", status: "offline", enabled: false },
-]
+import { useStreaming } from "./streaming-context"
 
 export function ProvidersCard() {
-  const getStatusIcon = (status: Provider["status"]) => {
+  const { providers, activeProvider, setActiveProvider, toggleProvider } = useStreaming()
+
+  const getStatusIcon = (status: "online" | "offline" | "degraded") => {
     switch (status) {
       case "online":
         return <CheckCircle className="w-4 h-4 text-green-500" />
@@ -32,7 +20,7 @@ export function ProvidersCard() {
     }
   }
 
-  const getStatusBadge = (status: Provider["status"]) => {
+  const getStatusBadge = (status: "online" | "offline" | "degraded") => {
     switch (status) {
       case "online":
         return (
@@ -55,6 +43,17 @@ export function ProvidersCard() {
     }
   }
 
+  const handleToggle = (providerId: string, enabled: boolean) => {
+    toggleProvider(providerId, enabled)
+  }
+
+  const handleSelectProvider = (providerId: string) => {
+    const provider = providers.find(p => p.id === providerId)
+    if (provider?.enabled && provider.status !== "offline") {
+      setActiveProvider(providerId)
+    }
+  }
+
   return (
     <Card className="glass-card glass-card-hover border-border">
       <CardHeader className="pb-2">
@@ -67,12 +66,24 @@ export function ProvidersCard() {
         {providers.map((provider) => (
           <div
             key={provider.id}
-            className="flex items-center justify-between p-3 rounded-lg bg-secondary/30 border border-border hover:border-primary/30 transition-colors"
+            onClick={() => handleSelectProvider(provider.id)}
+            className={`flex items-center justify-between p-3 rounded-lg border transition-all cursor-pointer ${
+              activeProvider === provider.id 
+                ? "bg-primary/10 border-primary/50" 
+                : "bg-secondary/30 border-border hover:border-primary/30"
+            } ${provider.status === "offline" ? "opacity-50 cursor-not-allowed" : ""}`}
           >
             <div className="flex items-center gap-3">
               {getStatusIcon(provider.status)}
               <div>
-                <p className="text-sm font-medium text-foreground">{provider.name}</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-medium text-foreground">{provider.name}</p>
+                  {activeProvider === provider.id && (
+                    <Badge className="bg-primary/20 text-primary text-xs border-none">
+                      Ativo
+                    </Badge>
+                  )}
+                </div>
                 {provider.latency && (
                   <p className="text-xs text-muted-foreground">{provider.latency}ms</p>
                 )}
@@ -81,7 +92,9 @@ export function ProvidersCard() {
             <div className="flex items-center gap-3">
               {getStatusBadge(provider.status)}
               <Switch 
-                checked={provider.enabled} 
+                checked={provider.enabled}
+                onCheckedChange={(checked) => handleToggle(provider.id, checked)}
+                onClick={(e) => e.stopPropagation()}
                 disabled={provider.status === "offline"}
                 className="data-[state=checked]:bg-primary"
               />
