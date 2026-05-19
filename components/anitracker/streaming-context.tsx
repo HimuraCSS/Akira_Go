@@ -132,8 +132,6 @@ interface StreamingContextType extends StreamingState {
 const defaultAddons: Addon[] = [
   { id: "consumet-1", name: "Consumet API", url: "https://api.consumet.org", status: "online", type: "scraper", providerId: "gogoanime" },
   { id: "zoro-1", name: "Zoro Provider", url: "https://zoro.to", status: "online", type: "scraper", providerId: "zoro" },
-  { id: "nyaa-1", name: "Nyaa.si", url: "https://nyaa.si/", status: "online", type: "scraper", providerId: "nyaa" },
-  { id: "nekobt-1", name: "NekoBT", url: "https://nekobt.to/search?group_id=7251504327481&media_id=s1392", status: "online", type: "scraper", providerId: "nekobt" },
 ]
 
 // Default providers based on Consumet availability
@@ -155,28 +153,6 @@ const defaultProviders: Provider[] = [
     latency: 120,
     hasSubtitles: true,
     languages: ["English", "Portuguese", "Spanish"],
-  },
-  { 
-    id: "nyaa", 
-    name: "Nyaa.si (Torrent)", 
-    status: "online", 
-    enabled: true, 
-    latency: 80,
-    hasSubtitles: true,
-    languages: ["Japanese", "English", "Portuguese"],
-    isCustom: false,
-    url: "https://nyaa.si/",
-  },
-  { 
-    id: "nekobt", 
-    name: "NekoBT (Torrent)", 
-    status: "online", 
-    enabled: true, 
-    latency: 150,
-    hasSubtitles: true,
-    languages: ["Japanese", "Portuguese"],
-    isCustom: false,
-    url: "https://nekobt.to/",
   },
   { 
     id: "animefox", 
