@@ -1,24 +1,21 @@
 "use client"
 
 import { useState } from "react"
-import Image from "next/image"
-import { Star, Play, Info, ChevronLeft, ChevronRight } from "lucide-react"
+import { ChevronLeft, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
+import { AnimeCard, AnimeCardSkeleton, type AnimeData } from "./anime-card"
 
-interface Anime {
-  id: string
-  title: string
-  japaneseTitle: string
-  image: string
-  score: number
-  episodes: number
-  status: "Airing" | "Completed" | "Upcoming"
-  synopsis: string
-  genres: string[]
+interface AnimeCarouselProps {
+  title?: string
+  subtitle?: string
+  animes?: AnimeData[]
+  isLoading?: boolean
+  onPlayAnime?: (anime: AnimeData) => void
+  onAnimeInfo?: (anime: AnimeData) => void
 }
 
-const trendingAnimes: Anime[] = [
+// Default data for when no props are provided
+const defaultAnimes: AnimeData[] = [
   {
     id: "1",
     title: "Solo Leveling",
@@ -29,6 +26,7 @@ const trendingAnimes: Anime[] = [
     status: "Airing",
     synopsis: "Após ser despertado com poderes únicos, o caçador mais fraco de todos se torna o mais forte...",
     genres: ["Ação", "Fantasia"],
+    year: 2024,
   },
   {
     id: "2",
@@ -40,6 +38,7 @@ const trendingAnimes: Anime[] = [
     status: "Completed",
     synopsis: "Tanjiro busca vingança contra os demônios que destruíram sua família...",
     genres: ["Ação", "Sobrenatural"],
+    year: 2019,
   },
   {
     id: "3",
@@ -51,6 +50,7 @@ const trendingAnimes: Anime[] = [
     status: "Completed",
     synopsis: "Yuji Itadori se junta à luta contra maldições sobrenaturais...",
     genres: ["Ação", "Horror"],
+    year: 2020,
   },
   {
     id: "4",
@@ -62,6 +62,7 @@ const trendingAnimes: Anime[] = [
     status: "Completed",
     synopsis: "A humanidade luta pela sobrevivência contra gigantes devoradores...",
     genres: ["Ação", "Drama"],
+    year: 2013,
   },
   {
     id: "5",
@@ -73,6 +74,7 @@ const trendingAnimes: Anime[] = [
     status: "Airing",
     synopsis: "Em um mundo de super-heróis, um garoto sem poderes sonha em se tornar o maior...",
     genres: ["Ação", "Escolar"],
+    year: 2016,
   },
   {
     id: "6",
@@ -84,22 +86,23 @@ const trendingAnimes: Anime[] = [
     status: "Completed",
     synopsis: "Denji se funde com seu demônio motosserra para caçar demônios...",
     genres: ["Ação", "Horror"],
+    year: 2022,
   },
 ]
 
-export function AnimeCarousel() {
+export function AnimeCarousel({ 
+  title = "Em Alta",
+  subtitle = "Os animes mais populares da temporada",
+  animes,
+  isLoading = false,
+  onPlayAnime,
+  onAnimeInfo,
+}: AnimeCarouselProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null)
-
-  const getStatusColor = (status: Anime["status"]) => {
-    switch (status) {
-      case "Airing":
-        return "border-green-500/30 text-green-500 bg-green-500/10"
-      case "Completed":
-        return "border-primary/30 text-primary bg-primary/10"
-      case "Upcoming":
-        return "border-yellow-500/30 text-yellow-500 bg-yellow-500/10"
-    }
-  }
+  
+  // Use provided animes or fallback to defaults
+  const displayAnimes = animes ?? defaultAnimes
+  const isEmpty = !isLoading && displayAnimes.length === 0
 
   return (
     <section className="py-8">
@@ -107,8 +110,8 @@ export function AnimeCarousel() {
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h2 className="text-2xl font-bold text-foreground">Em Alta</h2>
-            <p className="text-sm text-muted-foreground">Os animes mais populares da temporada</p>
+            <h2 className="text-2xl font-bold text-foreground">{title}</h2>
+            <p className="text-sm text-muted-foreground">{subtitle}</p>
           </div>
           <div className="flex gap-2">
             <Button variant="outline" size="icon" className="border-border hover:border-primary/50">
@@ -120,80 +123,43 @@ export function AnimeCarousel() {
           </div>
         </div>
 
-        {/* Carousel */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-          {trendingAnimes.map((anime) => (
-            <div
-              key={anime.id}
-              className="group relative"
-              onMouseEnter={() => setHoveredId(anime.id)}
-              onMouseLeave={() => setHoveredId(null)}
-            >
-              {/* Card */}
-              <div className="relative aspect-[2/3] rounded-lg overflow-hidden glass-card border border-border group-hover:border-primary/50 transition-all duration-300">
-                <Image
-                  src={anime.image}
-                  alt={anime.title}
-                  fill
-                  loading="lazy"
-                  sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, 16vw"
-                  className="object-cover transition-transform duration-300 group-hover:scale-110"
-                />
-                
-                {/* Overlay */}
-                <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent opacity-80" />
-                
-                {/* Score Badge */}
-                <div className="absolute top-2 right-2">
-                  <Badge className="bg-background/80 backdrop-blur-sm text-foreground border-none">
-                    <Star className="w-3 h-3 mr-1 text-yellow-500 fill-yellow-500" />
-                    {anime.score}
-                  </Badge>
-                </div>
+        {/* Loading State */}
+        {isLoading && (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            {[...Array(6)].map((_, i) => (
+              <AnimeCardSkeleton key={i} />
+            ))}
+          </div>
+        )}
 
-                {/* Status Badge */}
-                <div className="absolute top-2 left-2">
-                  <Badge variant="outline" className={`text-xs ${getStatusColor(anime.status)}`}>
-                    {anime.status === "Airing" ? "No Ar" : anime.status === "Completed" ? "Completo" : "Em Breve"}
-                  </Badge>
-                </div>
-
-                {/* Bottom Info */}
-                <div className="absolute bottom-0 left-0 right-0 p-3">
-                  <h3 className="text-sm font-semibold text-foreground truncate">{anime.title}</h3>
-                  <p className="text-xs text-muted-foreground">{anime.episodes} episódios</p>
-                </div>
-
-                {/* Hover Overlay */}
-                <div className={`absolute inset-0 bg-background/95 backdrop-blur-sm p-4 flex flex-col justify-between transition-opacity duration-300 ${
-                  hoveredId === anime.id ? "opacity-100" : "opacity-0 pointer-events-none"
-                }`}>
-                  <div>
-                    <h3 className="text-sm font-bold text-foreground mb-1">{anime.title}</h3>
-                    <p className="text-xs text-muted-foreground mb-2">{anime.japaneseTitle}</p>
-                    <div className="flex flex-wrap gap-1 mb-2">
-                      {anime.genres.map((genre) => (
-                        <Badge key={genre} variant="outline" className="text-xs border-border">
-                          {genre}
-                        </Badge>
-                      ))}
-                    </div>
-                    <p className="text-xs text-muted-foreground line-clamp-3">{anime.synopsis}</p>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button size="sm" className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground">
-                      <Play className="w-3 h-3 mr-1" />
-                      Assistir
-                    </Button>
-                    <Button size="sm" variant="outline" className="border-border">
-                      <Info className="w-3 h-3" />
-                    </Button>
-                  </div>
-                </div>
-              </div>
+        {/* Empty State */}
+        {isEmpty && (
+          <div className="flex flex-col items-center justify-center py-16 glass-card rounded-lg border border-border">
+            <div className="w-16 h-16 rounded-full bg-secondary/50 flex items-center justify-center mb-4">
+              <svg className="w-8 h-8 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z" />
+              </svg>
             </div>
-          ))}
-        </div>
+            <p className="text-muted-foreground text-sm">Nenhum anime encontrado</p>
+            <p className="text-muted-foreground/60 text-xs mt-1">Tente ajustar seus filtros ou provedores</p>
+          </div>
+        )}
+
+        {/* Anime Grid */}
+        {!isLoading && !isEmpty && (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            {displayAnimes.map((anime) => (
+              <AnimeCard
+                key={anime.id}
+                anime={anime}
+                isHovered={hoveredId === anime.id}
+                onHover={setHoveredId}
+                onPlay={onPlayAnime}
+                onInfo={onAnimeInfo}
+              />
+            ))}
+          </div>
+        )}
       </div>
     </section>
   )

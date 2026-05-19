@@ -1,10 +1,11 @@
 "use client"
 
-import { useState, lazy, Suspense, useRef } from "react"
+import { useState, lazy, Suspense, useRef, useEffect } from "react"
 import Image from "next/image"
 import { Header } from "@/components/anitracker/header"
 import { HeroSection } from "@/components/anitracker/hero-section"
-import { StreamingProvider } from "@/components/anitracker/streaming-context"
+import { StreamingProvider, useStreaming } from "@/components/anitracker/streaming-context"
+import type { AnimeData } from "@/components/anitracker/anime-card"
 
 // Lazy load components below the fold for better initial load performance
 const StatsCard = lazy(() => import("@/components/anitracker/stats-card").then(m => ({ default: m.StatsCard })))
@@ -43,6 +44,98 @@ function SectionSkeleton() {
   )
 }
 
+// Simulated API data - Replace with real API calls
+const mockFeaturedAnime: AnimeData = {
+  id: "cyberpunk-edgerunners",
+  title: "Cyberpunk: Edgerunners",
+  japaneseTitle: "サイバーパンク エッジランナーズ",
+  image: "https://images.unsplash.com/photo-1578632767115-351597cf2477?w=400&q=80",
+  bannerImage: "https://images.unsplash.com/photo-1578632767115-351597cf2477?w=1920&q=80",
+  score: 9.1,
+  episodes: 10,
+  status: "Completed",
+  synopsis: "Em uma distopia dominada por corporações e obsessão por tecnologia, um jovem delinquente de rua tenta sobreviver em Night City, uma cidade que vive da modificação corporal.",
+  genres: ["Ação", "Sci-Fi", "Cyberpunk"],
+  year: 2022,
+  studio: "Studio Trigger",
+  duration: "24min/ep",
+}
+
+const mockTrendingAnimes: AnimeData[] = [
+  {
+    id: "1",
+    title: "Solo Leveling",
+    japaneseTitle: "俺だけレベルアップな件",
+    image: "https://images.unsplash.com/photo-1612036782180-6f0b6cd846fe?w=400&q=80",
+    score: 8.9,
+    episodes: 12,
+    status: "Airing",
+    synopsis: "Após ser despertado com poderes únicos, o caçador mais fraco de todos se torna o mais forte...",
+    genres: ["Ação", "Fantasia"],
+    year: 2024,
+  },
+  {
+    id: "2",
+    title: "Demon Slayer",
+    japaneseTitle: "鬼滅の刃",
+    image: "https://images.unsplash.com/photo-1578632767115-351597cf2477?w=400&q=80",
+    score: 9.2,
+    episodes: 26,
+    status: "Completed",
+    synopsis: "Tanjiro busca vingança contra os demônios que destruíram sua família...",
+    genres: ["Ação", "Sobrenatural"],
+    year: 2019,
+  },
+  {
+    id: "3",
+    title: "Jujutsu Kaisen",
+    japaneseTitle: "呪術廻戦",
+    image: "https://images.unsplash.com/photo-1614583225154-5fcdda07019e?w=400&q=80",
+    score: 8.7,
+    episodes: 24,
+    status: "Completed",
+    synopsis: "Yuji Itadori se junta à luta contra maldições sobrenaturais...",
+    genres: ["Ação", "Horror"],
+    year: 2020,
+  },
+  {
+    id: "4",
+    title: "Attack on Titan",
+    japaneseTitle: "進撃の巨人",
+    image: "https://images.unsplash.com/photo-1601850494422-3cf14624b0b3?w=400&q=80",
+    score: 9.5,
+    episodes: 87,
+    status: "Completed",
+    synopsis: "A humanidade luta pela sobrevivência contra gigantes devoradores...",
+    genres: ["Ação", "Drama"],
+    year: 2013,
+  },
+  {
+    id: "5",
+    title: "My Hero Academia",
+    japaneseTitle: "僕のヒーローアカデミア",
+    image: "https://images.unsplash.com/photo-1560169897-fc0cdbdfa4d5?w=400&q=80",
+    score: 8.4,
+    episodes: 138,
+    status: "Airing",
+    synopsis: "Em um mundo de super-heróis, um garoto sem poderes sonha em se tornar o maior...",
+    genres: ["Ação", "Escolar"],
+    year: 2016,
+  },
+  {
+    id: "6",
+    title: "Chainsaw Man",
+    japaneseTitle: "チェンソーマン",
+    image: "https://images.unsplash.com/photo-1618336753974-aae8e04506aa?w=400&q=80",
+    score: 8.8,
+    episodes: 12,
+    status: "Completed",
+    synopsis: "Denji se funde com seu demônio motosserra para caçar demônios...",
+    genres: ["Ação", "Horror"],
+    year: 2022,
+  },
+]
+
 const continueWatchingData = [
   { id: "cw-1", title: "Cyberpunk: Edgerunners", episode: 8, progress: 65, image: "https://images.unsplash.com/photo-1578632767115-351597cf2477?w=400&q=80" },
   { id: "cw-2", title: "Solo Leveling", episode: 5, progress: 30, image: "https://images.unsplash.com/photo-1612036782180-6f0b6cd846fe?w=400&q=80" },
@@ -53,12 +146,58 @@ const continueWatchingData = [
 function AniTrackerContent() {
   const [addonsModalOpen, setAddonsModalOpen] = useState(false)
   const videoPlayerRef = useRef<HTMLDivElement>(null)
+  const { playEpisode } = useStreaming()
+
+  // Simulated loading states - Replace with real data fetching
+  const [featuredAnime, setFeaturedAnime] = useState<AnimeData | null>(null)
+  const [trendingAnimes, setTrendingAnimes] = useState<AnimeData[]>([])
+  const [isLoadingFeatured, setIsLoadingFeatured] = useState(true)
+  const [isLoadingTrending, setIsLoadingTrending] = useState(true)
+
+  // Simulate data fetching
+  useEffect(() => {
+    // Simulate API delay for featured anime
+    const featuredTimer = setTimeout(() => {
+      setFeaturedAnime(mockFeaturedAnime)
+      setIsLoadingFeatured(false)
+    }, 800)
+
+    // Simulate API delay for trending animes
+    const trendingTimer = setTimeout(() => {
+      setTrendingAnimes(mockTrendingAnimes)
+      setIsLoadingTrending(false)
+    }, 1200)
+
+    return () => {
+      clearTimeout(featuredTimer)
+      clearTimeout(trendingTimer)
+    }
+  }, [])
 
   const scrollToPlayer = () => {
-    // Small delay to allow the player to initialize
     setTimeout(() => {
       videoPlayerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
     }, 100)
+  }
+
+  const handlePlayAnime = (anime: AnimeData) => {
+    const episode = {
+      id: `${anime.id}-ep-1`,
+      number: 1,
+      title: "Episódio 1",
+      thumbnail: anime.image,
+      duration: anime.duration || "24:00",
+      animeId: anime.id,
+      animeTitle: anime.title,
+    }
+    
+    playEpisode(episode)
+    scrollToPlayer()
+  }
+
+  const handleAnimeInfo = (anime: AnimeData) => {
+    // Could open a modal or navigate to detail page
+    console.log("Info for:", anime.title)
   }
 
   return (
@@ -68,8 +207,10 @@ function AniTrackerContent() {
 
       {/* Main Content */}
       <main className="pt-16">
-        {/* Hero Section - Above the fold, loads immediately */}
+        {/* Hero Section - Dynamic with loading state */}
         <HeroSection 
+          anime={featuredAnime ?? undefined}
+          isLoading={isLoadingFeatured}
           onOpenAddons={() => setAddonsModalOpen(true)} 
           onWatchNow={scrollToPlayer}
         />
@@ -93,9 +234,16 @@ function AniTrackerContent() {
           </div>
         </section>
 
-        {/* Trending Anime Carousel - Lazy loaded */}
+        {/* Trending Anime Carousel - Dynamic with loading state */}
         <Suspense fallback={<SectionSkeleton />}>
-          <AnimeCarousel />
+          <AnimeCarousel 
+            title="Em Alta"
+            subtitle="Os animes mais populares da temporada"
+            animes={trendingAnimes}
+            isLoading={isLoadingTrending}
+            onPlayAnime={handlePlayAnime}
+            onAnimeInfo={handleAnimeInfo}
+          />
         </Suspense>
 
         {/* Video Player Section - Lazy loaded */}
