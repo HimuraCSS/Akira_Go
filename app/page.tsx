@@ -1,17 +1,12 @@
 "use client"
 
-import { useState, lazy, Suspense, useRef, useEffect } from "react"
+import { useState, lazy, Suspense, useRef } from "react"
 import Image from "next/image"
 import { Header } from "@/components/anitracker/header"
 import { HeroSection } from "@/components/anitracker/hero-section"
 import { StreamingProvider, useStreaming } from "@/components/anitracker/streaming-context"
 import type { AnimeData } from "@/components/anitracker/anime-card"
-import { 
-  trendingAnimeList, 
-  continueWatchingList, 
-  fetchFeaturedAnime, 
-  fetchTrendingAnimes 
-} from "@/lib/anime-data"
+import { useDashboardData, usePopularAnime } from "@/hooks/use-anime"
 
 // Lazy load components below the fold for better initial load performance
 const StatsCard = lazy(() => import("@/components/anitracker/stats-card").then(m => ({ default: m.StatsCard })))
@@ -50,51 +45,59 @@ function SectionSkeleton() {
   )
 }
 
-function AniTrackerContent() {
+// Continue watching mock data (this would come from user's watch history in a real app)
+const continueWatchingList = [
+  { 
+    id: "cw-1", 
+    title: "Solo Leveling", 
+    episode: 8, 
+    progress: 65, 
+    image: "https://cdn.myanimelist.net/images/anime/1908/141597.jpg",
+    nextEpisodeTitle: "A Arte do Monarca das Sombras"
+  },
+  { 
+    id: "cw-2", 
+    title: "Frieren", 
+    episode: 15, 
+    progress: 30, 
+    image: "https://cdn.myanimelist.net/images/anime/1015/138006.jpg",
+    nextEpisodeTitle: "Memórias de Himmel"
+  },
+  { 
+    id: "cw-3", 
+    title: "Jujutsu Kaisen S2", 
+    episode: 18, 
+    progress: 80, 
+    image: "https://cdn.myanimelist.net/images/anime/1792/138022.jpg",
+    nextEpisodeTitle: "Incidente de Shibuya - Parte 35"
+  },
+  { 
+    id: "cw-4", 
+    title: "Kaiju No. 8", 
+    episode: 5, 
+    progress: 45, 
+    image: "https://cdn.myanimelist.net/images/anime/1032/142086.jpg",
+    nextEpisodeTitle: "O Despertar de Kafka"
+  },
+]
+
+function AkiraGoContent() {
   const [addonsModalOpen, setAddonsModalOpen] = useState(false)
   const videoPlayerRef = useRef<HTMLDivElement>(null)
   const { playEpisode } = useStreaming()
 
-  // Dynamic data states
-  const [featuredAnime, setFeaturedAnime] = useState<AnimeData | null>(null)
-  const [trendingAnimes, setTrendingAnimes] = useState<AnimeData[]>([])
-  const [isLoadingFeatured, setIsLoadingFeatured] = useState(true)
-  const [isLoadingTrending, setIsLoadingTrending] = useState(true)
+  // Fetch real data from Jikan API using SWR hooks
+  const { 
+    featured, 
+    trending, 
+    airing, 
+    popular, 
+    upcoming,
+    isLoading 
+  } = useDashboardData()
 
-  // Fetch data from centralized database
-  useEffect(() => {
-    let mounted = true
-
-    async function loadData() {
-      try {
-        const featured = await fetchFeaturedAnime()
-        if (mounted) {
-          setFeaturedAnime(featured)
-          setIsLoadingFeatured(false)
-        }
-      } catch (error) {
-        console.error("Failed to fetch featured anime:", error)
-        if (mounted) setIsLoadingFeatured(false)
-      }
-
-      try {
-        const trending = await fetchTrendingAnimes()
-        if (mounted) {
-          setTrendingAnimes(trending)
-          setIsLoadingTrending(false)
-        }
-      } catch (error) {
-        console.error("Failed to fetch trending animes:", error)
-        if (mounted) setIsLoadingTrending(false)
-      }
-    }
-
-    loadData()
-
-    return () => {
-      mounted = false
-    }
-  }, [])
+  // Additional hook for "best rated" section
+  const { animes: topRated, isLoading: isLoadingTopRated } = usePopularAnime(12)
 
   const scrollToPlayer = () => {
     setTimeout(() => {
@@ -118,6 +121,7 @@ function AniTrackerContent() {
   }
 
   const handleAnimeInfo = (anime: AnimeData) => {
+    // In a real app, this would navigate to the anime detail page
     console.log("Info for:", anime.title)
   }
 
@@ -128,10 +132,10 @@ function AniTrackerContent() {
 
       {/* Main Content */}
       <main className="pt-16">
-        {/* Hero Section - Dynamic with loading state */}
+        {/* Hero Section - Dynamic with real API data */}
         <HeroSection 
-          anime={featuredAnime ?? undefined}
-          isLoading={isLoadingFeatured}
+          anime={featured ?? undefined}
+          isLoading={isLoading && !featured}
           onOpenAddons={() => setAddonsModalOpen(true)} 
           onWatchNow={scrollToPlayer}
         />
@@ -155,25 +159,25 @@ function AniTrackerContent() {
           </div>
         </section>
 
-        {/* Trending Anime Carousel - Dynamic with loading state */}
+        {/* Trending Anime - Real API data */}
         <Suspense fallback={<SectionSkeleton />}>
           <AnimeCarousel 
             title="Em Alta"
             subtitle="Os animes mais populares da temporada"
-            animes={trendingAnimes}
-            isLoading={isLoadingTrending}
+            animes={trending}
+            isLoading={isLoading}
             onPlayAnime={handlePlayAnime}
             onAnimeInfo={handleAnimeInfo}
           />
         </Suspense>
 
-        {/* New Releases Section */}
+        {/* Currently Airing - Real API data */}
         <Suspense fallback={<SectionSkeleton />}>
           <AnimeCarousel 
-            title="Lançamentos 2024"
-            subtitle="As estreias mais aguardadas do ano"
-            animes={trendingAnimes.filter(a => a.year === 2024)}
-            isLoading={isLoadingTrending}
+            title="Em Exibição"
+            subtitle="Animes da temporada atual"
+            animes={airing}
+            isLoading={isLoading}
             onPlayAnime={handlePlayAnime}
             onAnimeInfo={handleAnimeInfo}
           />
@@ -195,13 +199,37 @@ function AniTrackerContent() {
         {/* Continue Watching Section */}
         <ContinueWatchingSection />
 
-        {/* Top Rated Section */}
+        {/* Popular Anime - Real API data */}
         <Suspense fallback={<SectionSkeleton />}>
           <AnimeCarousel 
-            title="Mais Bem Avaliados"
-            subtitle="Obras-primas com notas acima de 8.5"
-            animes={trendingAnimes.filter(a => a.score >= 8.5).sort((a, b) => b.score - a.score)}
-            isLoading={isLoadingTrending}
+            title="Mais Populares"
+            subtitle="Os animes mais assistidos de todos os tempos"
+            animes={popular}
+            isLoading={isLoading}
+            onPlayAnime={handlePlayAnime}
+            onAnimeInfo={handleAnimeInfo}
+          />
+        </Suspense>
+
+        {/* Top Rated Section - Real API data */}
+        <Suspense fallback={<SectionSkeleton />}>
+          <AnimeCarousel 
+            title="Melhores Avaliados"
+            subtitle="Obras-primas aclamadas pela comunidade"
+            animes={topRated.filter(a => a.score >= 8.0).sort((a, b) => b.score - a.score)}
+            isLoading={isLoadingTopRated}
+            onPlayAnime={handlePlayAnime}
+            onAnimeInfo={handleAnimeInfo}
+          />
+        </Suspense>
+
+        {/* Upcoming Anime - Real API data */}
+        <Suspense fallback={<SectionSkeleton />}>
+          <AnimeCarousel 
+            title="Em Breve"
+            subtitle="Os próximos lançamentos mais aguardados"
+            animes={upcoming}
+            isLoading={isLoading}
             onPlayAnime={handlePlayAnime}
             onAnimeInfo={handleAnimeInfo}
           />
@@ -314,10 +342,10 @@ function ContinueWatchingCard({ anime }: { anime: ContinueWatchingAnime }) {
   )
 }
 
-export default function AniTrackerPage() {
+export default function AkiraGoPage() {
   return (
     <StreamingProvider>
-      <AniTrackerContent />
+      <AkiraGoContent />
     </StreamingProvider>
   )
 }
