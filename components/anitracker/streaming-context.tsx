@@ -1,17 +1,12 @@
 "use client"
 
-import { createContext, useContext, useState, useCallback, ReactNode } from "react"
+import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from "react"
 import {
   searchAnime,
   getAnimeInfo,
-  getStreamingSources,
-  getBestSource,
   findAnimeInConsumet,
   PROVIDER_INFO,
   type ConsumetProvider,
-  type ConsumetAnimeInfo,
-  type ConsumetEpisode,
-  type ConsumetStreamSource,
 } from "@/lib/consumet-api"
 
 // Types
@@ -200,7 +195,57 @@ const defaultProviders: Provider[] = [
 
 const StreamingContext = createContext<StreamingContextType | null>(null)
 
+// Load addons from localStorage
+const loadAddonsFromStorage = (): Addon[] => {
+  if (typeof window === "undefined") return defaultAddons
+  try {
+    const stored = localStorage.getItem("akira-go-addons")
+    if (stored) {
+      return JSON.parse(stored)
+    }
+  } catch {
+    // Ignore parse errors
+  }
+  return defaultAddons
+}
+
+// Save addons to localStorage
+const saveAddonsToStorage = (addons: Addon[]) => {
+  if (typeof window === "undefined") return
+  try {
+    localStorage.setItem("akira-go-addons", JSON.stringify(addons))
+  } catch {
+    // Ignore storage errors
+  }
+}
+
+// Load providers from localStorage
+const loadProvidersFromStorage = (): Provider[] => {
+  if (typeof window === "undefined") return defaultProviders
+  try {
+    const stored = localStorage.getItem("akira-go-providers")
+    if (stored) {
+      return JSON.parse(stored)
+    }
+  } catch {
+    // Ignore parse errors
+  }
+  return defaultProviders
+}
+
+// Save providers to localStorage
+const saveProvidersToStorage = (providers: Provider[]) => {
+  if (typeof window === "undefined") return
+  try {
+    localStorage.setItem("akira-go-providers", JSON.stringify(providers))
+  } catch {
+    // Ignore storage errors
+  }
+}
+
 export function StreamingProvider({ children }: { children: ReactNode }) {
+  const [isClient, setIsClient] = useState(false)
+  
   const [state, setState] = useState<StreamingState>({
     activeProvider: "gogoanime",
     providers: defaultProviders,
@@ -219,6 +264,30 @@ export function StreamingProvider({ children }: { children: ReactNode }) {
     subtitles: [],
     activeSubtitle: null,
   })
+  
+  // Initialize state on client side only
+  useEffect(() => {
+    setIsClient(true)
+    setState(prev => ({
+      ...prev,
+      addons: loadAddonsFromStorage(),
+      providers: loadProvidersFromStorage(),
+    }))
+  }, [])
+  
+  // Save addons to localStorage when they change
+  useEffect(() => {
+    if (isClient) {
+      saveAddonsToStorage(state.addons)
+    }
+  }, [state.addons, isClient])
+  
+  // Save providers to localStorage when they change
+  useEffect(() => {
+    if (isClient) {
+      saveProvidersToStorage(state.providers)
+    }
+  }, [state.providers, isClient])
 
   const setActiveProvider = useCallback((providerId: ConsumetProvider | string) => {
     setState(prev => {
@@ -481,15 +550,23 @@ export function StreamingProvider({ children }: { children: ReactNode }) {
         consumetEpisodeId = foundEpisode.id
       }
 
-      // Get streaming sources
-      const streamInfo = await getStreamingSources(consumetEpisodeId, state.activeProvider)
+      // Get streaming sources using our new API
+      const response = await fetch(
+        `/api/stream?action=watch&episodeId=${encodeURIComponent(consumetEpisodeId)}&provider=${state.activeProvider}`
+      )
+      
+      if (!response.ok) {
+        throw new Error("Falha ao buscar stream")
+      }
+      
+      const streamInfo = await response.json()
       
       if (!streamInfo || !streamInfo.sources || streamInfo.sources.length === 0) {
         throw new Error("Nenhuma fonte de streaming disponível")
       }
 
       // Convert to our StreamSource format
-      const sources: StreamSource[] = streamInfo.sources.map((source, index) => ({
+      const sources: StreamSource[] = streamInfo.sources.map((source: { url: string; quality: string; isM3U8: boolean }, index: number) => ({
         id: `source-${index}-${source.quality}`,
         name: `${state.activeProvider} ${source.quality}`,
         quality: source.quality,
@@ -498,9 +575,28 @@ export function StreamingProvider({ children }: { children: ReactNode }) {
         status: "active" as const,
       }))
 
-      // Get best quality source
-      const bestSource = getBestSource(streamInfo.sources)
-      const currentSource = sources.find(s => s.url === bestSource?.url) || sources[0]
+      // Get subtitles if available
+      const subs: Subtitle[] = (streamInfo.subtitles || []).map((sub: { url: string; lang: string }) => ({
+        url: sub.url,
+        lang: sub.lang,
+      }))
+
+      // Find best quality source
+      const qualityOrder = ["1080p", "720p", "480p", "360p", "auto", "default", "backup"]
+      let currentSource = sources[0]
+      for (const quality of qualityOrder) {
+        const found = sources.find(s => s.quality.toLowerCase() === quality.toLowerCase())
+        if (found) {
+          currentSource = found
+          break
+        }
+      }
+      
+      // Auto-select PT-BR subtitle if available
+      const ptBrSub = subs.find(s => 
+        s.lang.toLowerCase().includes("portuguese") || 
+        s.lang.toLowerCase().includes("pt")
+      )
 
       setState(prev => ({
         ...prev,
@@ -511,6 +607,8 @@ export function StreamingProvider({ children }: { children: ReactNode }) {
         isBuffering: false,
         hlsReady: true,
         isPlaying: true,
+        subtitles: subs,
+        activeSubtitle: ptBrSub || null,
       }))
     } catch (error) {
       const message = error instanceof Error ? error.message : "Erro ao carregar stream"
