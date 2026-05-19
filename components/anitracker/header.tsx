@@ -1,18 +1,39 @@
 "use client"
 
 import { useState, useRef, useEffect } from "react"
-import { Menu, Search, Bell, User, X, Loader2 } from "lucide-react"
+import { Menu, Search, Bell, User, X, Loader2, LogOut, Settings } from "lucide-react"
 import Image from "next/image"
+import Link from "next/link"
+import { usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { useAnimeSearch } from "@/hooks/use-anime"
 import { useDebounce } from "@/hooks/use-debounce"
+import { useMALAuth } from "@/components/anitracker/mal-auth-context"
+
+const NAV_ITEMS = [
+  { href: "/", label: "Início" },
+  { href: "/descobrir", label: "Descobrir" },
+  { href: "/minha-lista", label: "Minha Lista" },
+  { href: "/agenda", label: "Agenda" },
+]
 
 export function Header() {
   const [searchQuery, setSearchQuery] = useState("")
   const [isSearchOpen, setIsSearchOpen] = useState(false)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const searchRef = useRef<HTMLDivElement>(null)
+  const pathname = usePathname()
+  
+  const { user, isAuthenticated, isLoading: isAuthLoading, login, logout } = useMALAuth()
   
   // Debounce search to avoid too many API calls
   const debouncedQuery = useDebounce(searchQuery, 400)
@@ -38,16 +59,26 @@ export function Header() {
     setIsSearchOpen(false)
   }
 
+  const isActive = (href: string) => {
+    if (href === "/") return pathname === "/"
+    return pathname.startsWith(href)
+  }
+
   return (
     <header className="fixed top-0 left-0 right-0 z-50 glass-card border-b border-border">
       <div className="container mx-auto px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" className="lg:hidden text-foreground">
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="lg:hidden text-foreground"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            >
               <Menu className="w-5 h-5" />
             </Button>
-            <div className="flex items-center gap-2">
+            <Link href="/" className="flex items-center gap-2">
               <Image
                 src="/logo.png"
                 alt="AKIRA Go"
@@ -58,23 +89,27 @@ export function Header() {
               <span className="text-xl font-bold text-foreground">
                 AKIRA <span className="text-primary">Go</span>
               </span>
-            </div>
+            </Link>
           </div>
 
           {/* Navigation */}
           <nav className="hidden lg:flex items-center gap-6">
-            <a href="#" className="text-sm font-medium text-foreground hover:text-primary transition-colors">
-              Início
-            </a>
-            <a href="#" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors">
-              Descobrir
-            </a>
-            <a href="#" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors">
-              Minha Lista
-            </a>
-            <a href="#" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors">
-              Agenda
-            </a>
+            {NAV_ITEMS.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`text-sm font-medium transition-colors ${
+                  isActive(item.href)
+                    ? "text-foreground"
+                    : "text-muted-foreground hover:text-primary"
+                }`}
+              >
+                {item.label}
+                {isActive(item.href) && (
+                  <span className="block h-0.5 bg-primary mt-1 rounded-full" />
+                )}
+              </Link>
+            ))}
           </nav>
 
           {/* Search & Actions */}
@@ -115,7 +150,6 @@ export function Header() {
                           key={anime.id}
                           onClick={() => {
                             clearSearch()
-                            // In a real app, navigate to anime detail page
                           }}
                           className="w-full flex items-center gap-3 p-3 hover:bg-secondary/50 transition-colors text-left"
                         >
@@ -161,14 +195,106 @@ export function Header() {
                 3
               </Badge>
             </Button>
+            
             <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground md:hidden">
               <Search className="w-5 h-5" />
             </Button>
-            <div className="w-8 h-8 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center">
-              <User className="w-4 h-4 text-primary" />
-            </div>
+
+            {/* User Menu */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="w-8 h-8 rounded-full overflow-hidden border border-primary/30 focus:outline-none focus:ring-2 focus:ring-primary">
+                  {isAuthenticated && user?.picture ? (
+                    <Image
+                      src={user.picture}
+                      alt={user.name}
+                      width={32}
+                      height={32}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-primary/20 flex items-center justify-center">
+                      <User className="w-4 h-4 text-primary" />
+                    </div>
+                  )}
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                {isAuthLoading ? (
+                  <div className="p-4 flex items-center justify-center">
+                    <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                  </div>
+                ) : isAuthenticated && user ? (
+                  <>
+                    <div className="px-3 py-2">
+                      <p className="text-sm font-medium text-foreground">{user.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {user.anime_statistics?.num_items_completed || 0} animes completos
+                      </p>
+                    </div>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem asChild>
+                      <Link href="/minha-lista" className="cursor-pointer">
+                        <User className="w-4 h-4 mr-2" />
+                        Minha Lista
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link href="/descobrir" className="cursor-pointer">
+                        <Search className="w-4 h-4 mr-2" />
+                        Descobrir
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem>
+                      <Settings className="w-4 h-4 mr-2" />
+                      Configurações
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={logout} className="text-red-500 focus:text-red-500">
+                      <LogOut className="w-4 h-4 mr-2" />
+                      Sair
+                    </DropdownMenuItem>
+                  </>
+                ) : (
+                  <>
+                    <div className="px-3 py-2">
+                      <p className="text-sm text-muted-foreground">
+                        Conecte sua conta para sincronizar sua lista
+                      </p>
+                    </div>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={login} className="cursor-pointer">
+                      <User className="w-4 h-4 mr-2" />
+                      Entrar com MyAnimeList
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
+
+        {/* Mobile Menu */}
+        {mobileMenuOpen && (
+          <nav className="lg:hidden py-4 border-t border-border">
+            <div className="flex flex-col gap-2">
+              {NAV_ITEMS.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    isActive(item.href)
+                      ? "bg-primary/10 text-foreground"
+                      : "text-muted-foreground hover:bg-secondary"
+                  }`}
+                >
+                  {item.label}
+                </Link>
+              ))}
+            </div>
+          </nav>
+        )}
       </div>
     </header>
   )

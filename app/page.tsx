@@ -5,6 +5,7 @@ import Image from "next/image"
 import { Header } from "@/components/anitracker/header"
 import { HeroSection } from "@/components/anitracker/hero-section"
 import { StreamingProvider, useStreaming } from "@/components/anitracker/streaming-context"
+import { MALAuthProvider } from "@/components/anitracker/mal-auth-context"
 import type { AnimeData } from "@/components/anitracker/anime-card"
 import { useDashboardData, usePopularAnime } from "@/hooks/use-anime"
 
@@ -344,8 +345,10 @@ function ContinueWatchingCard({ anime }: { anime: ContinueWatchingAnime }) {
 
 export default function AkiraGoPage() {
   return (
-    <StreamingProvider>
-      <AkiraGoContent />
-    </StreamingProvider>
+    <MALAuthProvider>
+      <StreamingProvider>
+        <AkiraGoContent />
+      </StreamingProvider>
+    </MALAuthProvider>
   )
 }
