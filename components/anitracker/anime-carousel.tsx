@@ -135,6 +135,8 @@ export function AnimeCarousel() {
                   src={anime.image}
                   alt={anime.title}
                   fill
+                  loading="lazy"
+                  sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, 16vw"
                   className="object-cover transition-transform duration-300 group-hover:scale-110"
                 />
                 

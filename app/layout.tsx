@@ -3,8 +3,14 @@ import { Geist, Geist_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import './globals.css'
 
-const _geist = Geist({ subsets: ["latin"] });
-const _geistMono = Geist_Mono({ subsets: ["latin"] });
+const _geist = Geist({ 
+  subsets: ["latin"],
+  display: "swap",
+});
+const _geistMono = Geist_Mono({ 
+  subsets: ["latin"],
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: 'AKIRA Go - Premium Anime Streaming Dashboard',

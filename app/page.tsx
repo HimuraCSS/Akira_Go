@@ -1,14 +1,53 @@
 "use client"
 
-import { useState } from "react"
+import { useState, lazy, Suspense } from "react"
+import Image from "next/image"
 import { Header } from "@/components/anitracker/header"
 import { HeroSection } from "@/components/anitracker/hero-section"
-import { StatsCard } from "@/components/anitracker/stats-card"
-import { ProvidersCard } from "@/components/anitracker/providers-card"
-import { TrackingCard } from "@/components/anitracker/tracking-card"
-import { AnimeCarousel } from "@/components/anitracker/anime-carousel"
-import { VideoPlayer } from "@/components/anitracker/video-player"
-import { AddonsModal } from "@/components/anitracker/addons-modal"
+
+// Lazy load components below the fold for better initial load performance
+const StatsCard = lazy(() => import("@/components/anitracker/stats-card").then(m => ({ default: m.StatsCard })))
+const ProvidersCard = lazy(() => import("@/components/anitracker/providers-card").then(m => ({ default: m.ProvidersCard })))
+const TrackingCard = lazy(() => import("@/components/anitracker/tracking-card").then(m => ({ default: m.TrackingCard })))
+const AnimeCarousel = lazy(() => import("@/components/anitracker/anime-carousel").then(m => ({ default: m.AnimeCarousel })))
+const VideoPlayer = lazy(() => import("@/components/anitracker/video-player").then(m => ({ default: m.VideoPlayer })))
+const AddonsModal = lazy(() => import("@/components/anitracker/addons-modal").then(m => ({ default: m.AddonsModal })))
+
+// Loading skeleton for lazy components
+function CardSkeleton() {
+  return (
+    <div className="glass-card rounded-lg border border-border p-4 animate-pulse">
+      <div className="h-6 bg-secondary/50 rounded w-3/4 mb-4" />
+      <div className="space-y-3">
+        <div className="h-4 bg-secondary/50 rounded w-full" />
+        <div className="h-4 bg-secondary/50 rounded w-5/6" />
+        <div className="h-4 bg-secondary/50 rounded w-4/6" />
+      </div>
+    </div>
+  )
+}
+
+function SectionSkeleton() {
+  return (
+    <div className="py-8">
+      <div className="container mx-auto px-6 lg:px-8">
+        <div className="h-8 bg-secondary/50 rounded w-48 mb-6 animate-pulse" />
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          {[...Array(6)].map((_, i) => (
+            <div key={i} className="aspect-[2/3] bg-secondary/50 rounded-lg animate-pulse" />
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const continueWatchingData = [
+  { title: "Cyberpunk: Edgerunners", episode: "EP 8", progress: 65, image: "https://images.unsplash.com/photo-1578632767115-351597cf2477?w=400&q=80" },
+  { title: "Solo Leveling", episode: "EP 5", progress: 30, image: "https://images.unsplash.com/photo-1612036782180-6f0b6cd846fe?w=400&q=80" },
+  { title: "Demon Slayer S4", episode: "EP 3", progress: 80, image: "https://images.unsplash.com/photo-1614583225154-5fcdda07019e?w=400&q=80" },
+  { title: "Jujutsu Kaisen", episode: "EP 12", progress: 45, image: "https://images.unsplash.com/photo-1601850494422-3cf14624b0b3?w=400&q=80" },
+]
 
 export default function AniTrackerPage() {
   const [addonsModalOpen, setAddonsModalOpen] = useState(false)
@@ -20,25 +59,43 @@ export default function AniTrackerPage() {
 
       {/* Main Content */}
       <main className="pt-16">
-        {/* Hero Section */}
+        {/* Hero Section - Above the fold, loads immediately */}
         <HeroSection onOpenAddons={() => setAddonsModalOpen(true)} />
 
-        {/* Bento Dashboard */}
+        {/* Bento Dashboard - Lazy loaded */}
         <section className="py-8 -mt-20 relative z-20">
           <div className="container mx-auto px-6 lg:px-8">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              <StatsCard />
-              <ProvidersCard />
-              <TrackingCard />
-            </div>
+            <Suspense fallback={
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <CardSkeleton />
+                <CardSkeleton />
+                <CardSkeleton />
+              </div>
+            }>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <StatsCard />
+                <ProvidersCard />
+                <TrackingCard />
+              </div>
+            </Suspense>
           </div>
         </section>
 
-        {/* Trending Anime Carousel */}
-        <AnimeCarousel />
+        {/* Trending Anime Carousel - Lazy loaded */}
+        <Suspense fallback={<SectionSkeleton />}>
+          <AnimeCarousel />
+        </Suspense>
 
-        {/* Video Player Section */}
-        <VideoPlayer />
+        {/* Video Player Section - Lazy loaded */}
+        <Suspense fallback={
+          <div className="py-8">
+            <div className="container mx-auto px-6 lg:px-8">
+              <div className="aspect-video bg-secondary/50 rounded-lg animate-pulse" />
+            </div>
+          </div>
+        }>
+          <VideoPlayer />
+        </Suspense>
 
         {/* Continue Watching Section */}
         <section className="py-8">
@@ -49,23 +106,21 @@ export default function AniTrackerPage() {
             </div>
             
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {[
-                { title: "Cyberpunk: Edgerunners", episode: "EP 8", progress: 65, image: "https://images.unsplash.com/photo-1578632767115-351597cf2477?w=400&q=80" },
-                { title: "Solo Leveling", episode: "EP 5", progress: 30, image: "https://images.unsplash.com/photo-1612036782180-6f0b6cd846fe?w=400&q=80" },
-                { title: "Demon Slayer S4", episode: "EP 3", progress: 80, image: "https://images.unsplash.com/photo-1614583225154-5fcdda07019e?w=400&q=80" },
-                { title: "Jujutsu Kaisen", episode: "EP 12", progress: 45, image: "https://images.unsplash.com/photo-1601850494422-3cf14624b0b3?w=400&q=80" },
-              ].map((anime, index) => (
+              {continueWatchingData.map((anime, index) => (
                 <div
                   key={index}
                   className="group relative glass-card rounded-lg overflow-hidden border border-border hover:border-primary/50 transition-all cursor-pointer"
                 >
                   <div className="aspect-video relative">
-                    <div 
-                      className="absolute inset-0 bg-cover bg-center"
-                      style={{ backgroundImage: `url('${anime.image}')` }}
-                    >
-                      <div className="absolute inset-0 bg-gradient-to-t from-background to-transparent" />
-                    </div>
+                    <Image
+                      src={anime.image}
+                      alt={anime.title}
+                      fill
+                      loading="lazy"
+                      sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                      className="object-cover"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-background to-transparent" />
                     
                     {/* Progress Bar */}
                     <div className="absolute bottom-0 left-0 right-0 h-1 bg-secondary">
@@ -100,12 +155,14 @@ export default function AniTrackerPage() {
           <div className="container mx-auto px-6 lg:px-8">
             <div className="flex flex-col md:flex-row items-center justify-between gap-4">
               <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded bg-primary flex items-center justify-center">
-                  <svg className="w-4 h-4 text-primary-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                  </svg>
-                </div>
-                <span className="text-sm font-medium text-foreground">AniTracker</span>
+                <Image
+                  src="/logo.png"
+                  alt="AKIRA Go"
+                  width={24}
+                  height={24}
+                  className="w-6 h-6 object-contain"
+                />
+                <span className="text-sm font-medium text-foreground">AKIRA Go</span>
               </div>
               <div className="flex items-center gap-6 text-sm text-muted-foreground">
                 <a href="#" className="hover:text-primary transition-colors">Sobre</a>
@@ -114,15 +171,19 @@ export default function AniTrackerPage() {
                 <a href="#" className="hover:text-primary transition-colors">Contato</a>
               </div>
               <p className="text-xs text-muted-foreground">
-                © 2024 AniTracker. Todos os direitos reservados.
+                © 2024 AKIRA Go. Todos os direitos reservados.
               </p>
             </div>
           </div>
         </footer>
       </main>
 
-      {/* Addons Modal */}
-      <AddonsModal open={addonsModalOpen} onOpenChange={setAddonsModalOpen} />
+      {/* Addons Modal - Lazy loaded */}
+      {addonsModalOpen && (
+        <Suspense fallback={null}>
+          <AddonsModal open={addonsModalOpen} onOpenChange={setAddonsModalOpen} />
+        </Suspense>
+      )}
     </div>
   )
 }

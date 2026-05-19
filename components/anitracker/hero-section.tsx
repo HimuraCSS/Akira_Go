@@ -1,5 +1,6 @@
 "use client"
 
+import Image from "next/image"
 import { Play, Settings, Star, Calendar, Tv, Clock } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -11,13 +12,17 @@ interface HeroSectionProps {
 export function HeroSection({ onOpenAddons }: HeroSectionProps) {
   return (
     <section className="relative w-full h-[70vh] min-h-[500px] overflow-hidden">
-      {/* Background Image with Overlay */}
-      <div 
-        className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-        style={{
-          backgroundImage: `url('https://images.unsplash.com/photo-1578632767115-351597cf2477?w=1920&q=80')`,
-        }}
-      >
+      {/* Background Image with Overlay - Optimized with Next/Image priority for LCP */}
+      <div className="absolute inset-0">
+        <Image
+          src="https://images.unsplash.com/photo-1578632767115-351597cf2477?w=1920&q=80"
+          alt="Cyberpunk Edgerunners Hero Background"
+          fill
+          priority
+          sizes="100vw"
+          className="object-cover object-center"
+          quality={85}
+        />
         <div className="absolute inset-0 bg-gradient-to-r from-background via-background/90 to-transparent" />
         <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent" />
       </div>
