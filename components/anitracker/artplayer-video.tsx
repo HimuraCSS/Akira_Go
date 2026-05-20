@@ -134,16 +134,18 @@ export function VideoPlayer() {
         moreVideoAttr: {
           crossOrigin: "anonymous",
         },
-        subtitle: activeSubtitle ? {
-          url: activeSubtitle.url,
-          type: "vtt",
-          encoding: "utf-8",
-          style: {
-            color: "#fff",
-            fontSize: "20px",
-            textShadow: "2px 2px 4px rgba(0,0,0,0.8)",
+        ...(activeSubtitle && activeSubtitle.url ? {
+          subtitle: {
+            url: activeSubtitle.url,
+            type: "vtt",
+            encoding: "utf-8",
+            style: {
+              color: "#fff",
+              fontSize: "20px",
+              textShadow: "2px 2px 4px rgba(0,0,0,0.8)",
+            },
           },
-        } : undefined,
+        } : {}),
         settings: [
           {
             width: 200,
@@ -252,10 +254,14 @@ export function VideoPlayer() {
 
   // Update subtitle
   useEffect(() => {
-    if (artInstance.current && activeSubtitle) {
-      artInstance.current.subtitle.switch(activeSubtitle.url, {
-        name: activeSubtitle.lang,
-      })
+    if (artInstance.current && activeSubtitle && artInstance.current.subtitle) {
+      try {
+        artInstance.current.subtitle.switch(activeSubtitle.url, {
+          name: activeSubtitle.lang,
+        })
+      } catch (e) {
+        console.log("[v0] Subtitle switch error:", e)
+      }
     }
   }, [activeSubtitle])
 

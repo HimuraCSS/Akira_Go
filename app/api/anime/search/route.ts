@@ -1,55 +1,56 @@
 import { NextResponse } from "next/server"
 
-// Use amvstrm API as primary (more reliable)
-const AMVSTRM_URL = "https://api.amvstr.me/api/v2"
+// Consumet mirrors list - these are community-hosted and more reliable
+const CONSUMET_MIRRORS = [
+  "https://consumet-api-five-chi.vercel.app",
+  "https://consumet-api-cyan.vercel.app",
+  "https://consumet-api-pi.vercel.app",
+]
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const query = searchParams.get("q")
+  const provider = searchParams.get("provider") || "gogoanime"
 
   if (!query) {
     return NextResponse.json({ error: "Query required" }, { status: 400 })
   }
 
-  try {
-    // Try amvstrm API first (most reliable)
-    const amvstrmUrl = `${AMVSTRM_URL}/search?q=${encodeURIComponent(query)}&limit=20`
-    console.log("[API] Search request:", amvstrmUrl)
-    
-    const response = await fetch(amvstrmUrl, {
-      headers: { Accept: "application/json" },
-      signal: AbortSignal.timeout(5000),
-    })
+  // Try each mirror
+  for (const mirror of CONSUMET_MIRRORS) {
+    try {
+      const url = `${mirror}/anime/${provider}/${encodeURIComponent(query)}`
+      console.log("[API] Search request:", url)
+      
+      const response = await fetch(url, {
+        headers: { Accept: "application/json" },
+        signal: AbortSignal.timeout(8000),
+      })
 
-    if (response.ok) {
+      if (!response.ok) continue
+      
       const text = await response.text()
-      // Validate JSON
+      
+      // Validate JSON response
       if (!text.startsWith("{") && !text.startsWith("[")) {
-        throw new Error("Invalid response")
+        console.log("[API] Invalid response from:", mirror)
+        continue
       }
       
       const data = JSON.parse(text)
-      const results = data.results || data.data || []
+      const results = data.results || []
       
       if (results.length > 0) {
-        console.log("[API] Search success, results:", results.length)
-        return NextResponse.json({ 
-          results: results.map((r: { id: string; title: string; image?: string; cover?: string; releaseDate?: string; type?: string }) => ({
-            id: r.id,
-            title: r.title,
-            image: r.image || r.cover,
-            releaseDate: r.releaseDate,
-            type: r.type,
-          }))
-        })
+        console.log("[API] Search success from:", mirror, "results:", results.length)
+        return NextResponse.json({ results })
       }
+    } catch (error) {
+      console.log("[API] Mirror failed:", mirror, error instanceof Error ? error.message : "Unknown")
+      continue
     }
-
-    // Return empty results if nothing found
-    console.log("[API] No results found for:", query)
-    return NextResponse.json({ results: [] })
-  } catch (error) {
-    console.error("[API] Search error:", error)
-    return NextResponse.json({ results: [], error: "Search failed" })
   }
+
+  // Return empty if all mirrors failed
+  console.log("[API] All mirrors failed for search:", query)
+  return NextResponse.json({ results: [] })
 }

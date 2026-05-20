@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 
 // Addon API - Returns video sources for a given anime/episode
-// Uses multiple API sources for redundancy
+// Uses Consumet mirrors and direct GogoAnime scraping for redundancy
 
 interface StreamSource {
   url: string
@@ -51,166 +51,230 @@ const DEMO_STREAMS: StreamSource[] = [
   },
 ]
 
-// Try amvstrm API (usually stable)
-async function tryAmvstrmAPI(title: string, episode: number): Promise<StreamResponse | null> {
-  try {
-    const searchUrl = `https://api.amvstr.me/api/v2/search?q=${encodeURIComponent(title)}&limit=5`
-    console.log("[v0] Trying amvstrm:", searchUrl)
-    
-    const searchRes = await fetch(searchUrl, { 
-      headers: { Accept: "application/json" },
-      signal: AbortSignal.timeout(5000),
-    })
-    
-    if (!searchRes.ok) return null
-    
-    const searchData = await searchRes.json()
-    const results = searchData.results || searchData.data || []
-    
-    if (results.length === 0) return null
-    
-    const anime = results[0]
-    const animeId = anime.id || anime.slug
-    
-    // Get episodes
-    const infoRes = await fetch(`https://api.amvstr.me/api/v2/info/${animeId}`, {
-      headers: { Accept: "application/json" },
-      signal: AbortSignal.timeout(5000),
-    })
-    
-    if (!infoRes.ok) return null
-    
-    const infoData = await infoRes.json()
-    const episodes = infoData.episodes || infoData.data?.episodes || []
-    
-    if (episodes.length === 0) return null
-    
-    const ep = episodes.find((e: { number?: number; episode?: number }) => 
-      (e.number || e.episode) === episode
-    ) || episodes[episode - 1] || episodes[0]
-    
-    const episodeId = ep.id || ep.episodeId
-    
-    // Get stream
-    const streamRes = await fetch(`https://api.amvstr.me/api/v2/stream/${episodeId}`, {
-      headers: { Accept: "application/json" },
-      signal: AbortSignal.timeout(5000),
-    })
-    
-    if (!streamRes.ok) return null
-    
-    const streamData = await streamRes.json()
-    const sources = streamData.sources || streamData.data?.sources || []
-    
-    if (sources.length > 0) {
-      return {
-        sources: sources.map((s: { url: string; quality?: string; isM3U8?: boolean }) => ({
-          url: s.url,
-          quality: s.quality || "auto",
-          isM3U8: s.isM3U8 !== false,
-        })),
-        subtitles: streamData.subtitles || streamData.data?.subtitles || [],
-      }
-    }
-    return null
-  } catch (error) {
-    console.log("[v0] amvstrm error:", error)
-    return null
-  }
-}
+// List of Consumet mirrors to try
+const CONSUMET_MIRRORS = [
+  "https://consumet-api-five-chi.vercel.app",
+  "https://consumet-api-cyan.vercel.app", 
+  "https://consumet-api-pi.vercel.app",
+  "https://consumet-api-omega.vercel.app",
+  "https://consumet-api-sigma.vercel.app",
+]
 
-// Try Anify API
-async function tryAnifyAPI(title: string, episode: number): Promise<StreamResponse | null> {
-  try {
-    const searchUrl = `https://api.anify.tv/search/anime/${encodeURIComponent(title)}`
-    console.log("[v0] Trying anify:", searchUrl)
-    
-    const searchRes = await fetch(searchUrl, {
-      headers: { Accept: "application/json" },
-      signal: AbortSignal.timeout(5000),
-    })
-    
-    if (!searchRes.ok) return null
-    
-    const results = await searchRes.json()
-    if (!results || results.length === 0) return null
-    
-    const anime = results[0]
-    
-    // Get episodes with sources
-    const sourcesRes = await fetch(`https://api.anify.tv/sources?providerId=gogoanime&watchId=${anime.id}&episode=${episode}&id=${anime.id}&subType=sub`, {
-      headers: { Accept: "application/json" },
-      signal: AbortSignal.timeout(5000),
-    })
-    
-    if (!sourcesRes.ok) return null
-    
-    const sourcesData = await sourcesRes.json()
-    const sources = sourcesData.sources || []
-    
-    if (sources.length > 0) {
-      return {
-        sources: sources.map((s: { url: string; quality?: string }) => ({
-          url: s.url,
-          quality: s.quality || "auto",
-          isM3U8: s.url.includes(".m3u8"),
-        })),
-        subtitles: sourcesData.subtitles || [],
-      }
-    }
-    return null
-  } catch (error) {
-    console.log("[v0] anify error:", error)
-    return null
-  }
-}
-
-// Try direct gogoanime format
-async function tryDirectGogoanime(title: string, episode: number): Promise<StreamResponse | null> {
-  try {
-    const slug = toSlug(title)
-    const episodeId = `${slug}-episode-${episode}`
-    
-    // Try multiple gogoanime API mirrors
-    const mirrors = [
-      `https://gogoanime-api-theta.vercel.app/anime/gogoanime/watch/${episodeId}`,
-      `https://api.consumet.org/anime/gogoanime/watch/${episodeId}`,
-    ]
-    
-    for (const url of mirrors) {
+// Try Consumet mirrors
+async function tryConsumetMirrors(
+  title: string, 
+  episode: number, 
+  provider: string = "gogoanime"
+): Promise<StreamResponse | null> {
+  const searchTerms = [
+    title,
+    normalizeTitle(title),
+    title.split(":")[0].trim(),
+  ]
+  
+  for (const mirror of CONSUMET_MIRRORS) {
+    for (const term of searchTerms) {
       try {
-        console.log("[v0] Trying direct gogoanime:", url)
-        const res = await fetch(url, {
+        // Search for anime
+        const searchUrl = `${mirror}/anime/${provider}/${encodeURIComponent(term)}`
+        console.log("[v0] Trying Consumet mirror:", searchUrl)
+        
+        const searchRes = await fetch(searchUrl, {
           headers: { Accept: "application/json" },
-          signal: AbortSignal.timeout(3000),
+          signal: AbortSignal.timeout(8000),
         })
         
-        if (!res.ok) continue
+        if (!searchRes.ok) continue
         
-        const text = await res.text()
-        // Check if response is valid JSON
-        if (text.startsWith("require") || text.startsWith("<")) continue
+        const text = await searchRes.text()
+        if (!text.startsWith("{") && !text.startsWith("[")) continue
         
-        const data = JSON.parse(text)
-        if (data.sources && data.sources.length > 0) {
+        const searchData = JSON.parse(text)
+        const results = searchData.results || []
+        
+        if (results.length === 0) continue
+        
+        // Find best match
+        const lowerTitle = title.toLowerCase()
+        const anime = results.find((r: { title: string }) => 
+          r.title.toLowerCase().includes(lowerTitle.split(" ")[0].toLowerCase())
+        ) || results[0]
+        
+        // Get anime info with episodes
+        const infoUrl = `${mirror}/anime/${provider}/info/${anime.id}`
+        console.log("[v0] Getting anime info:", infoUrl)
+        
+        const infoRes = await fetch(infoUrl, {
+          headers: { Accept: "application/json" },
+          signal: AbortSignal.timeout(8000),
+        })
+        
+        if (!infoRes.ok) continue
+        
+        const infoText = await infoRes.text()
+        if (!infoText.startsWith("{")) continue
+        
+        const infoData = JSON.parse(infoText)
+        const episodes = infoData.episodes || []
+        
+        if (episodes.length === 0) continue
+        
+        // Find the requested episode
+        const ep = episodes.find((e: { number: number }) => e.number === episode) || episodes[0]
+        
+        // Get streaming sources
+        const watchUrl = `${mirror}/anime/${provider}/watch/${ep.id}`
+        console.log("[v0] Getting sources:", watchUrl)
+        
+        const watchRes = await fetch(watchUrl, {
+          headers: { Accept: "application/json" },
+          signal: AbortSignal.timeout(8000),
+        })
+        
+        if (!watchRes.ok) continue
+        
+        const watchText = await watchRes.text()
+        if (!watchText.startsWith("{")) continue
+        
+        const watchData = JSON.parse(watchText)
+        const sources = watchData.sources || []
+        
+        if (sources.length > 0) {
+          console.log("[v0] Found sources from mirror:", mirror)
           return {
-            sources: data.sources.map((s: { url: string; quality?: string; isM3U8?: boolean }) => ({
+            sources: sources.map((s: { url: string; quality?: string; isM3U8?: boolean }) => ({
               url: s.url,
-              quality: s.quality || "auto",
+              quality: s.quality || "default",
               isM3U8: s.isM3U8 !== false,
             })),
-            subtitles: data.subtitles || [],
+            subtitles: watchData.subtitles,
           }
         }
-      } catch {
+      } catch (error) {
+        console.log("[v0] Mirror error:", mirror, error instanceof Error ? error.message : "Unknown")
         continue
       }
     }
-    return null
-  } catch (error) {
-    console.log("[v0] direct gogoanime error:", error)
-    return null
   }
+  
+  return null
+}
+
+// Try direct episode URL construction (works for some providers)
+async function tryDirectEpisodeUrl(title: string, episode: number): Promise<StreamResponse | null> {
+  const slug = toSlug(title)
+  const episodeId = `${slug}-episode-${episode}`
+  
+  for (const mirror of CONSUMET_MIRRORS.slice(0, 3)) {
+    try {
+      const watchUrl = `${mirror}/anime/gogoanime/watch/${episodeId}`
+      console.log("[v0] Trying direct URL:", watchUrl)
+      
+      const res = await fetch(watchUrl, {
+        headers: { Accept: "application/json" },
+        signal: AbortSignal.timeout(5000),
+      })
+      
+      if (!res.ok) continue
+      
+      const text = await res.text()
+      if (!text.startsWith("{")) continue
+      
+      const data = JSON.parse(text)
+      
+      if (data.sources && data.sources.length > 0) {
+        console.log("[v0] Direct URL worked!")
+        return {
+          sources: data.sources.map((s: { url: string; quality?: string; isM3U8?: boolean }) => ({
+            url: s.url,
+            quality: s.quality || "default",
+            isM3U8: s.isM3U8 !== false,
+          })),
+          subtitles: data.subtitles,
+        }
+      }
+    } catch {
+      continue
+    }
+  }
+  
+  return null
+}
+
+// Try Zoro/Aniwatch provider (has subtitles)
+async function tryZoroProvider(title: string, episode: number): Promise<StreamResponse | null> {
+  for (const mirror of CONSUMET_MIRRORS.slice(0, 2)) {
+    try {
+      // Search in zoro
+      const searchUrl = `${mirror}/anime/zoro/${encodeURIComponent(title)}`
+      console.log("[v0] Trying Zoro provider:", searchUrl)
+      
+      const searchRes = await fetch(searchUrl, {
+        headers: { Accept: "application/json" },
+        signal: AbortSignal.timeout(8000),
+      })
+      
+      if (!searchRes.ok) continue
+      
+      const text = await searchRes.text()
+      if (!text.startsWith("{")) continue
+      
+      const searchData = JSON.parse(text)
+      const results = searchData.results || []
+      
+      if (results.length === 0) continue
+      
+      const anime = results[0]
+      
+      // Get info
+      const infoRes = await fetch(`${mirror}/anime/zoro/info?id=${anime.id}`, {
+        headers: { Accept: "application/json" },
+        signal: AbortSignal.timeout(8000),
+      })
+      
+      if (!infoRes.ok) continue
+      
+      const infoText = await infoRes.text()
+      if (!infoText.startsWith("{")) continue
+      
+      const infoData = JSON.parse(infoText)
+      const episodes = infoData.episodes || []
+      
+      if (episodes.length === 0) continue
+      
+      const ep = episodes.find((e: { number: number }) => e.number === episode) || episodes[0]
+      
+      // Get sources with vidcloud server (better quality)
+      const watchRes = await fetch(`${mirror}/anime/zoro/watch?episodeId=${ep.id}`, {
+        headers: { Accept: "application/json" },
+        signal: AbortSignal.timeout(8000),
+      })
+      
+      if (!watchRes.ok) continue
+      
+      const watchText = await watchRes.text()
+      if (!watchText.startsWith("{")) continue
+      
+      const watchData = JSON.parse(watchText)
+      
+      if (watchData.sources && watchData.sources.length > 0) {
+        console.log("[v0] Zoro sources found!")
+        return {
+          sources: watchData.sources.map((s: { url: string; quality?: string; isM3U8?: boolean }) => ({
+            url: s.url,
+            quality: s.quality || "default",
+            isM3U8: s.isM3U8 !== false,
+          })),
+          subtitles: watchData.subtitles,
+        }
+      }
+    } catch (error) {
+      console.log("[v0] Zoro error:", error instanceof Error ? error.message : "Unknown")
+      continue
+    }
+  }
+  
+  return null
 }
 
 export async function GET(request: Request) {
@@ -219,89 +283,76 @@ export async function GET(request: Request) {
   const episodeNumber = parseInt(searchParams.get("episode") || "1")
   const provider = searchParams.get("provider") || "gogoanime"
   const useDemo = searchParams.get("demo") === "true"
-  
-  console.log("[v0] Addon API:", { animeTitle, episodeNumber, provider, useDemo })
-  
+
+  console.log("[v0] Addon API request:", { animeTitle, episodeNumber, provider })
+
   if (!animeTitle) {
-    return NextResponse.json({ error: "Missing title", sources: [] }, { status: 400 })
+    return NextResponse.json(
+      { error: "Missing anime title", sources: [] },
+      { status: 400 }
+    )
   }
-  
-  // If demo mode requested, return demo streams immediately
+
+  // If explicitly requesting demo
   if (useDemo) {
     return NextResponse.json({
       success: true,
       isDemo: true,
-      anime: { id: "demo", title: animeTitle },
-      episode: { id: "demo", number: episodeNumber },
       sources: DEMO_STREAMS,
       subtitles: [],
-      provider: "demo",
+      message: "Demo streams loaded",
     })
   }
-  
+
   try {
+    // Try providers in order of reliability
     let streamData: StreamResponse | null = null
     
-    // Try multiple APIs in parallel for speed
-    const results = await Promise.allSettled([
-      tryAmvstrmAPI(animeTitle, episodeNumber),
-      tryAnifyAPI(animeTitle, episodeNumber),
-      tryDirectGogoanime(animeTitle, episodeNumber),
-    ])
+    // 1. Try Consumet mirrors with gogoanime
+    streamData = await tryConsumetMirrors(animeTitle, episodeNumber, "gogoanime")
     
-    // Use first successful result
-    for (const result of results) {
-      if (result.status === "fulfilled" && result.value) {
-        streamData = result.value
-        break
-      }
+    // 2. Try direct URL construction
+    if (!streamData) {
+      streamData = await tryDirectEpisodeUrl(animeTitle, episodeNumber)
     }
     
-    // Try with normalized title if no results
+    // 3. Try Zoro provider (has subtitles)
     if (!streamData) {
-      const normalizedTitle = normalizeTitle(animeTitle)
-      if (normalizedTitle !== animeTitle) {
-        console.log("[v0] Trying normalized:", normalizedTitle)
-        streamData = await tryAmvstrmAPI(normalizedTitle, episodeNumber)
-      }
+      streamData = await tryZoroProvider(animeTitle, episodeNumber)
     }
     
-    // Return demo streams as fallback with flag
-    if (!streamData) {
-      console.log("[v0] No sources found, returning demo streams")
+    // Return results or demo fallback
+    if (streamData && streamData.sources.length > 0) {
       return NextResponse.json({
         success: true,
-        isDemo: true,
-        anime: { id: toSlug(animeTitle), title: animeTitle },
-        episode: { id: `ep-${episodeNumber}`, number: episodeNumber },
-        sources: DEMO_STREAMS,
-        subtitles: [],
-        provider: "demo",
-        message: "Fontes reais indisponíveis. Usando vídeo de demonstração.",
+        isDemo: false,
+        anime: { title: animeTitle },
+        episode: { number: episodeNumber },
+        sources: streamData.sources,
+        subtitles: streamData.subtitles || [],
+        provider,
       })
     }
     
-    console.log("[v0] Found", streamData.sources.length, "sources")
-    return NextResponse.json({
-      success: true,
-      anime: { id: toSlug(animeTitle), title: animeTitle },
-      episode: { id: `ep-${episodeNumber}`, number: episodeNumber },
-      sources: streamData.sources,
-      subtitles: streamData.subtitles,
-      provider,
-    })
-  } catch (error) {
-    console.error("[v0] Addon API error:", error)
-    // Return demo streams on error
+    // Fallback to demo streams
+    console.log("[v0] No sources found, returning demo streams")
     return NextResponse.json({
       success: true,
       isDemo: true,
-      anime: { id: toSlug(animeTitle), title: animeTitle },
-      episode: { id: `ep-${episodeNumber}`, number: episodeNumber },
+      anime: { title: animeTitle },
+      episode: { number: episodeNumber },
       sources: DEMO_STREAMS,
       subtitles: [],
-      provider: "demo",
-      message: "Erro ao buscar fontes. Usando vídeo de demonstração.",
+      message: "Using demo streams - real sources unavailable",
+    })
+  } catch (error) {
+    console.error("[v0] Addon API error:", error)
+    return NextResponse.json({
+      success: true,
+      isDemo: true,
+      error: "API error, using demo",
+      sources: DEMO_STREAMS,
+      subtitles: [],
     })
   }
 }
