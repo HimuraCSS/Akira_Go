@@ -241,9 +241,15 @@ export function VideoPlayer() {
     }
   }, [activeSubtitle, availableSources, currentSource, setIsBuffering, setIsPlaying, switchSource])
 
-  // Initialize player when stream URL changes
+  // Initialize player when stream URL changes - skip for iframe sources
   useEffect(() => {
-    if (streamUrl && artRef.current) {
+    // Don't initialize ArtPlayer for iframe sources
+    const isIframe = currentSource?.type === "iframe" || 
+                     streamUrl?.includes("megaplay.buzz") ||
+                     streamUrl?.includes("/embed/") ||
+                     streamUrl?.includes("/stream/mal/")
+    
+    if (streamUrl && artRef.current && !isIframe) {
       const isHls = streamUrl.includes(".m3u8") || currentSource?.isM3U8
       initPlayer(streamUrl, isHls || false)
     }
@@ -258,7 +264,7 @@ export function VideoPlayer() {
         hlsInstance.current = null
       }
     }
-  }, [streamUrl, initPlayer, currentSource?.isM3U8])
+  }, [streamUrl, initPlayer, currentSource?.isM3U8, currentSource?.type])
 
   // Update subtitle
   useEffect(() => {
@@ -501,8 +507,8 @@ export function VideoPlayer() {
           </div>
         )}
 
-        {/* Loading Overlay */}
-        {(isLoadingStream || isInitializing || isBuffering) && (
+        {/* Loading Overlay - only show when not iframe */}
+        {(isLoadingStream || isInitializing || isBuffering) && !isIframeSource && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/60 z-10">
             <div className="flex flex-col items-center gap-3">
               <Loader2 className="w-10 h-10 text-primary animate-spin" />
@@ -514,8 +520,8 @@ export function VideoPlayer() {
           </div>
         )}
 
-        {/* Error Overlay */}
-        {(error || playerError) && (
+        {/* Error Overlay - only show when not iframe source */}
+        {(error || playerError) && !isIframeSource && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/80 z-20">
             <div className="flex flex-col items-center gap-4 p-6 text-center">
               <AlertCircle className="w-12 h-12 text-destructive" />
