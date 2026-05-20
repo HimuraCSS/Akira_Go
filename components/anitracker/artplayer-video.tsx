@@ -343,108 +343,182 @@ export function VideoPlayer() {
     }
   }
 
-  // Don't render player section at all if no anime is selected
-  if (!currentAnime && !currentEpisode && !isLoadingStream) {
-    return null
-  }
-
   return (
-    <section className="py-6">
-      <div className="container mx-auto px-6 lg:px-8">
-        {/* Section Title */}
-        <div className="mb-4">
-          <h2 className="text-xl font-bold text-foreground">Player</h2>
-          {currentAnime && (
-            <p className="text-sm text-muted-foreground">
-              Assistindo: {currentAnime.animeTitle}
-            </p>
-          )}
+    <div className="w-full space-y-4">
+      {/* Player Status Bar */}
+      <div className="flex items-center justify-between px-2">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <div className={cn(
+              "w-2 h-2 rounded-full",
+              isLoadingStream ? "bg-yellow-500 animate-pulse" :
+              streamUrl ? "bg-green-500" : "bg-muted"
+            )} />
+            <span className="text-sm text-muted-foreground">
+              {activeProviderData?.name || "Nenhum"} • {currentSource?.quality || "Auto"}
+            </span>
+          </div>
+          <Badge variant="outline" className="text-xs border-border">
+            {isLoadingStream ? "Carregando..." : 
+             isBuffering ? "Buffering..." : 
+             streamUrl ? "Pronto" : "Aguardando"}
+          </Badge>
         </div>
-
-        {/* Player Container - Reduced size with max-width */}
-        <div className="max-w-4xl mx-auto space-y-3">
-          {/* Compact Status Bar */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className={cn(
-                "w-1.5 h-1.5 rounded-full",
-                isLoadingStream ? "bg-yellow-500 animate-pulse" :
-                streamUrl ? "bg-green-500" : "bg-muted"
-              )} />
-              <span className="text-xs text-muted-foreground">
-                {activeProviderData?.name || "Auto"} • {currentSource?.quality || "HD"}
-              </span>
-              {isDemo && (
-                <Badge variant="outline" className="border-yellow-500/50 text-yellow-500 bg-yellow-500/10 text-[10px] px-1.5 py-0">
-                  Demo
-                </Badge>
-              )}
-            </div>
         
-            <div className="flex items-center gap-1">
-              {/* Compact Controls */}
-              {currentAnime && currentEpisode && (
-                <SubtitleSearch
-                  animeTitle={currentAnime.animeTitle}
-                  episodeNumber={currentEpisode.number}
-                  onSubtitleSelect={(sub) => setActiveSubtitle({ url: sub.url, lang: sub.lang })}
-                />
-              )}
+        <div className="flex items-center gap-2">
+          {/* PT-BR Subtitle Search */}
+          {currentAnime && currentEpisode && (
+            <SubtitleSearch
+              animeTitle={currentAnime.animeTitle}
+              episodeNumber={currentEpisode.number}
+              onSubtitleSelect={(sub) => {
+                // Set the selected subtitle
+                setActiveSubtitle({ url: sub.url, lang: sub.lang })
+              }}
+            />
+          )}
 
-              {/* Source & Subtitle - Combined Dropdown */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground gap-1">
-                    <Settings className="w-3.5 h-3.5" />
-                    <ChevronDown className="w-3 h-3" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48 bg-card border-border">
-                  <DropdownMenuLabel className="text-xs">Qualidade</DropdownMenuLabel>
-                  {availableSources.length > 0 ? (
-                    availableSources.slice(0, 4).map((source) => (
-                      <DropdownMenuItem
-                        key={source.id}
-                        onClick={() => switchSource(source.id)}
-                        className={cn("cursor-pointer text-xs", currentSource?.id === source.id && "bg-primary/10 text-primary")}
-                      >
-                        {source.quality}
-                      </DropdownMenuItem>
-                    ))
-                  ) : (
-                    <DropdownMenuItem disabled className="text-xs">Auto</DropdownMenuItem>
-                  )}
-                  <DropdownMenuSeparator />
-                  <DropdownMenuLabel className="text-xs">Legenda</DropdownMenuLabel>
+          {/* VLC Button & Demo Badge */}
+          {isDemo && (
+            <Badge variant="outline" className="border-yellow-500/50 text-yellow-500 bg-yellow-500/10 text-xs">
+              Demo
+            </Badge>
+          )}
+          
+          {streamUrl && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground gap-2">
+                  <ExternalLink className="w-4 h-4" />
+                  <span className="hidden sm:inline">Abrir em</span>
+                  <ChevronDown className="w-3 h-3" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56 bg-card border-border">
+                <DropdownMenuLabel>Player Externo</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <a href={getVLCLink() || "#"} className="cursor-pointer flex items-center gap-2">
+                    <Monitor className="w-4 h-4" />
+                    Abrir no VLC
+                  </a>
+                </DropdownMenuItem>
+                <DropdownMenuItem 
+                  onClick={() => navigator.clipboard.writeText(streamUrl)}
+                  className="cursor-pointer"
+                >
+                  <ExternalLink className="w-4 h-4 mr-2" />
+                  Copiar URL do Stream
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+
+          {/* Source Selector */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground gap-2">
+                <Settings className="w-4 h-4" />
+                <span className="hidden sm:inline">Fonte</span>
+                <ChevronDown className="w-3 h-3" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56 bg-card border-border">
+              <DropdownMenuLabel>Qualidade do Vídeo</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {availableSources.length > 0 ? (
+                availableSources.map((source) => (
                   <DropdownMenuItem
-                    onClick={() => setActiveSubtitle(null)}
-                    className={cn("cursor-pointer text-xs", !activeSubtitle && "bg-primary/10 text-primary")}
+                    key={source.id}
+                    onClick={() => switchSource(source.id)}
+                    className={cn(
+                      "cursor-pointer",
+                      currentSource?.id === source.id && "bg-primary/10 text-primary"
+                    )}
                   >
-                    Desativada
+                    <div className="flex items-center justify-between w-full">
+                      <span>{source.name}</span>
+                      <Badge variant="outline" className="text-xs">
+                        {source.quality}
+                      </Badge>
+                    </div>
                   </DropdownMenuItem>
-                  {subtitles.slice(0, 5).map((sub, index) => (
-                    <DropdownMenuItem
-                      key={index}
-                      onClick={() => setActiveSubtitle(sub)}
-                      className={cn("cursor-pointer text-xs", activeSubtitle?.url === sub.url && "bg-primary/10 text-primary")}
-                    >
-                      {sub.lang}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
+                ))
+              ) : (
+                <DropdownMenuItem disabled>
+                  Nenhuma fonte disponível
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
 
-              {/* Episode List Toggle */}
+          {/* Subtitle Selector */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
               <Button 
                 variant="ghost" 
-                size="sm"
-                onClick={() => setShowEpisodes(!showEpisodes)}
-                className={cn("h-7 px-2 text-muted-foreground hover:text-foreground", showEpisodes && "text-primary")}
+                size="sm" 
+                className={cn(
+                  "text-muted-foreground hover:text-foreground gap-2",
+                  activeSubtitle && "text-primary"
+                )}
               >
-                <List className="w-3.5 h-3.5" />
+                <Subtitles className="w-4 h-4" />
+                <span className="hidden sm:inline">Legenda</span>
+                <ChevronDown className="w-3 h-3" />
               </Button>
-            </div>
-          </div>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56 bg-card border-border">
+              <DropdownMenuLabel>Legendas</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => setActiveSubtitle(null)}
+                className={cn("cursor-pointer", !activeSubtitle && "bg-primary/10 text-primary")}
+              >
+                Desativadas
+              </DropdownMenuItem>
+              {subtitles.map((sub, index) => (
+                <DropdownMenuItem
+                  key={index}
+                  onClick={() => setActiveSubtitle(sub)}
+                  className={cn(
+                    "cursor-pointer",
+                    activeSubtitle?.url === sub.url && "bg-primary/10 text-primary"
+                  )}
+                >
+                  <div className="flex items-center justify-between w-full">
+                    <span>{sub.lang}</span>
+                    {(sub.lang.toLowerCase().includes("portuguese") || 
+                      sub.lang.toLowerCase().includes("pt")) && (
+                      <Badge className="bg-green-500/20 text-green-400 text-xs border-none">
+                        PT-BR
+                      </Badge>
+                    )}
+                  </div>
+                </DropdownMenuItem>
+              ))}
+              {subtitles.length === 0 && (
+                <DropdownMenuItem disabled className="text-xs">
+                  Nenhuma legenda disponível
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Episode List Toggle */}
+          <Button 
+            variant="ghost" 
+            size="sm"
+            onClick={() => setShowEpisodes(!showEpisodes)}
+            className={cn(
+              "text-muted-foreground hover:text-foreground",
+              showEpisodes && "text-primary"
+            )}
+          >
+            <List className="w-4 h-4" />
+          </Button>
+        </div>
+      </div>
 
       {/* Main Player Container */}
       <div className="relative aspect-video w-full bg-black rounded-lg overflow-hidden border border-border">
