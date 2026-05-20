@@ -1,98 +1,70 @@
 "use client"
 
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react"
+import { 
+  fetchMALUserProfile, 
+  fetchMALUserAnimeList, 
+  fetchMALUserStatistics,
+  fetchMALUserHistory,
+  type MALUserProfile,
+  type MALUserAnimeEntry
+} from "@/lib/jikan-api"
 
 // ============================================================================
-// MYANIMELIST AUTH CONTEXT
-// Uses OAuth2 with PKCE for secure authentication
+// MYANIMELIST SYNC CONTEXT
+// Uses Jikan API (public) - No OAuth required, just username
 // ============================================================================
 
 interface MALUser {
   id: number
-  name: string
-  picture: string | null
-  gender: string | null
+  username: string
+  avatar: string | null
   location: string | null
-  joined_at: string
-  anime_statistics?: {
-    num_items_watching: number
-    num_items_completed: number
-    num_items_on_hold: number
-    num_items_dropped: number
-    num_items_plan_to_watch: number
-    num_episodes: number
+  joined: string
+  statistics: {
+    watching: number
+    completed: number
+    on_hold: number
+    dropped: number
+    plan_to_watch: number
+    total_entries: number
+    episodes_watched: number
+    days_watched: number
     mean_score: number
   }
 }
 
 interface MALAnimeListItem {
-  node: {
-    id: number
-    title: string
-    main_picture?: {
-      medium: string
-      large: string
-    }
-    synopsis?: string
-    mean?: number
-    num_episodes?: number
-    status?: string
-    genres?: { id: number; name: string }[]
-    studios?: { id: number; name: string }[]
-    start_season?: { year: number; season: string }
-  }
-  list_status: {
-    status: "watching" | "completed" | "on_hold" | "dropped" | "plan_to_watch"
-    score: number
-    num_episodes_watched: number
-    is_rewatching: boolean
-    updated_at: string
-  }
+  mal_id: number
+  title: string
+  image: string
+  score: number
+  userScore: number
+  episodesWatched: number
+  totalEpisodes: number | null
+  status: string
+  year: number | null
 }
 
 interface MALAuthContextType {
   user: MALUser | null
-  isAuthenticated: boolean
+  isConnected: boolean
   isLoading: boolean
   error: string | null
   animeList: MALAnimeListItem[]
   isLoadingList: boolean
-  login: () => void
-  logout: () => void
+  connect: (username: string) => Promise<boolean>
+  disconnect: () => void
   refreshUserData: () => Promise<void>
-  fetchAnimeList: (status?: string) => Promise<void>
-  updateAnimeStatus: (animeId: number, status: string, episodesWatched?: number, score?: number) => Promise<void>
+  fetchAnimeList: (status?: "watching" | "completed" | "on_hold" | "dropped" | "plan_to_watch") => Promise<void>
   clearError: () => void
 }
 
 const MALAuthContext = createContext<MALAuthContextType | null>(null)
 
-// PKCE Helper functions
-function generateCodeVerifier(): string {
-  const array = new Uint8Array(32)
-  crypto.getRandomValues(array)
-  return btoa(String.fromCharCode.apply(null, Array.from(array)))
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "")
-}
-
-async function generateCodeChallenge(verifier: string): Promise<string> {
-  const encoder = new TextEncoder()
-  const data = encoder.encode(verifier)
-  const digest = await crypto.subtle.digest("SHA-256", data)
-  return btoa(String.fromCharCode.apply(null, Array.from(new Uint8Array(digest))))
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "")
-}
-
 // Storage keys
 const STORAGE_KEYS = {
-  ACCESS_TOKEN: "mal_access_token",
-  REFRESH_TOKEN: "mal_refresh_token",
-  TOKEN_EXPIRES: "mal_token_expires",
-  CODE_VERIFIER: "mal_code_verifier",
+  USERNAME: "mal_username",
   USER: "mal_user",
 } as const
 
@@ -103,294 +75,145 @@ export function MALAuthProvider({ children }: { children: ReactNode }) {
   const [animeList, setAnimeList] = useState<MALAnimeListItem[]>([])
   const [isLoadingList, setIsLoadingList] = useState(false)
 
-  const isAuthenticated = !!user
+  // Load saved user on mount
+  useEffect(() => {
+    const savedUser = localStorage.getItem(STORAGE_KEYS.USER)
+    if (savedUser) {
+      try {
+        setUser(JSON.parse(savedUser))
+      } catch {
+        localStorage.removeItem(STORAGE_KEYS.USER)
+      }
+    }
+    setIsLoading(false)
+  }, [])
 
-  const clearError = useCallback(() => setError(null), [])
+  // Transform Jikan profile to our format
+  const transformProfile = (profile: MALUserProfile): MALUser => ({
+    id: profile.mal_id,
+    username: profile.username,
+    avatar: profile.images?.jpg?.image_url || null,
+    location: profile.location,
+    joined: profile.joined,
+    statistics: {
+      watching: profile.statistics?.anime?.watching || 0,
+      completed: profile.statistics?.anime?.completed || 0,
+      on_hold: profile.statistics?.anime?.on_hold || 0,
+      dropped: profile.statistics?.anime?.dropped || 0,
+      plan_to_watch: profile.statistics?.anime?.plan_to_watch || 0,
+      total_entries: profile.statistics?.anime?.total_entries || 0,
+      episodes_watched: profile.statistics?.anime?.episodes_watched || 0,
+      days_watched: profile.statistics?.anime?.days_watched || 0,
+      mean_score: profile.statistics?.anime?.mean_score || 0,
+    }
+  })
 
-  // Logout function - defined early for use in other functions
-  const logout = useCallback(() => {
-    localStorage.removeItem(STORAGE_KEYS.ACCESS_TOKEN)
-    localStorage.removeItem(STORAGE_KEYS.REFRESH_TOKEN)
-    localStorage.removeItem(STORAGE_KEYS.TOKEN_EXPIRES)
-    localStorage.removeItem(STORAGE_KEYS.USER)
+  // Transform anime list entry
+  const transformAnimeEntry = (entry: MALUserAnimeEntry): MALAnimeListItem => ({
+    mal_id: entry.entry.mal_id,
+    title: entry.entry.title,
+    image: entry.entry.images?.jpg?.large_image_url || entry.entry.images?.jpg?.image_url || "",
+    score: entry.entry.score || 0,
+    userScore: entry.score,
+    episodesWatched: entry.episodes_watched,
+    totalEpisodes: entry.entry.episodes,
+    status: entry.entry.status,
+    year: entry.entry.year,
+  })
+
+  // Connect with username
+  const connect = useCallback(async (username: string): Promise<boolean> => {
+    setIsLoading(true)
+    setError(null)
+
+    try {
+      const profile = await fetchMALUserProfile(username)
+      
+      if (!profile) {
+        setError(`Usuario "${username}" nao encontrado no MyAnimeList`)
+        setIsLoading(false)
+        return false
+      }
+
+      const malUser = transformProfile(profile)
+      setUser(malUser)
+      
+      // Save to localStorage
+      localStorage.setItem(STORAGE_KEYS.USERNAME, username)
+      localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(malUser))
+      
+      setIsLoading(false)
+      return true
+    } catch (err) {
+      console.error("Failed to connect to MAL:", err)
+      setError("Erro ao conectar com o MyAnimeList")
+      setIsLoading(false)
+      return false
+    }
+  }, [])
+
+  // Disconnect
+  const disconnect = useCallback(() => {
     setUser(null)
     setAnimeList([])
+    localStorage.removeItem(STORAGE_KEYS.USERNAME)
+    localStorage.removeItem(STORAGE_KEYS.USER)
   }, [])
 
-  // Refresh token function
-  const refreshToken = useCallback(async () => {
-    try {
-      const refreshTokenValue = localStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN)
-      if (!refreshTokenValue) throw new Error("No refresh token")
-
-      const response = await fetch("/api/auth/mal/refresh", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ refreshToken: refreshTokenValue }),
-      })
-
-      if (!response.ok) throw new Error("Failed to refresh token")
-
-      const data = await response.json()
-      localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, data.access_token)
-      localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, data.refresh_token)
-      localStorage.setItem(STORAGE_KEYS.TOKEN_EXPIRES, String(Date.now() + data.expires_in * 1000))
-
-      return data.access_token
-    } catch (error) {
-      console.error("[v0] Token refresh error:", error)
-      logout()
-      throw error
-    }
-  }, [logout])
-
-  // Refresh user data function
+  // Refresh user data
   const refreshUserData = useCallback(async () => {
+    const username = localStorage.getItem(STORAGE_KEYS.USERNAME)
+    if (!username) return
+
+    setIsLoading(true)
     try {
-      const accessToken = localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN)
-      if (!accessToken) throw new Error("Not authenticated")
-
-      const response = await fetch("/api/auth/mal/user", {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      })
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          await refreshToken()
-          return refreshUserData()
-        }
-        throw new Error("Failed to fetch user data")
+      const profile = await fetchMALUserProfile(username)
+      if (profile) {
+        const malUser = transformProfile(profile)
+        setUser(malUser)
+        localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(malUser))
       }
-
-      const userData = await response.json()
-      setUser(userData)
-      localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(userData))
-    } catch (error) {
-      console.error("[v0] Error fetching user data:", error)
-      throw error
+    } catch (err) {
+      console.error("Failed to refresh user data:", err)
     }
-  }, [refreshToken])
-
-  // Check for existing session on mount
-  useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const storedUser = localStorage.getItem(STORAGE_KEYS.USER)
-        const accessToken = localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN)
-        const tokenExpires = localStorage.getItem(STORAGE_KEYS.TOKEN_EXPIRES)
-
-        if (storedUser && accessToken) {
-          // Check if token is expired
-          if (tokenExpires && Date.now() > parseInt(tokenExpires)) {
-            // Try to refresh token
-            await refreshToken()
-            await refreshUserData()
-          } else {
-            setUser(JSON.parse(storedUser))
-          }
-        }
-      } catch (error) {
-        console.error("[v0] Error checking auth:", error)
-        logout()
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    checkAuth()
-  }, [logout, refreshToken, refreshUserData])
-
-  // Handle OAuth callback
-  useEffect(() => {
-    const handleCallback = async () => {
-      const urlParams = new URLSearchParams(window.location.search)
-      const code = urlParams.get("code")
-      const state = urlParams.get("state")
-      const errorParam = urlParams.get("error")
-
-      // Handle error from MAL
-      if (errorParam) {
-        const errorDescription = urlParams.get("error_description") || "Erro desconhecido"
-        console.error("[v0] OAuth error:", errorParam, errorDescription)
-        setError(`Erro de autenticacao: ${errorDescription}`)
-        window.history.replaceState({}, document.title, window.location.pathname)
-        setIsLoading(false)
-        return
-      }
-
-      if (code && state === "mal_auth") {
-        try {
-          setIsLoading(true)
-          setError(null)
-          
-          const codeVerifier = localStorage.getItem(STORAGE_KEYS.CODE_VERIFIER)
-          
-          if (!codeVerifier) {
-            throw new Error("Code verifier not found. Please try logging in again.")
-          }
-
-          console.log("[v0] Exchanging code for token...")
-
-          // Exchange code for token
-          const response = await fetch("/api/auth/mal/token", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ code, codeVerifier }),
-          })
-
-          if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}))
-            console.error("[v0] Token exchange failed:", errorData)
-            throw new Error(errorData.error || "Failed to exchange code for token")
-          }
-
-          const data = await response.json()
-          console.log("[v0] Token received successfully")
-          
-          // Store tokens
-          localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, data.access_token)
-          localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, data.refresh_token)
-          localStorage.setItem(STORAGE_KEYS.TOKEN_EXPIRES, String(Date.now() + data.expires_in * 1000))
-
-          // Fetch user data
-          await refreshUserData()
-
-          console.log("[v0] User authenticated successfully")
-
-          // Clean URL
-          window.history.replaceState({}, document.title, window.location.pathname)
-        } catch (error) {
-          console.error("[v0] OAuth callback error:", error)
-          setError(error instanceof Error ? error.message : "Erro ao fazer login")
-        } finally {
-          setIsLoading(false)
-          localStorage.removeItem(STORAGE_KEYS.CODE_VERIFIER)
-        }
-      }
-    }
-
-    handleCallback()
-  }, [refreshUserData])
-
-  const login = useCallback(async () => {
-    try {
-      setError(null)
-      const clientId = process.env.NEXT_PUBLIC_MAL_CLIENT_ID
-      
-      if (!clientId) {
-        setError("Credenciais do MyAnimeList nao configuradas. Entre em contato com o administrador.")
-        console.error("[v0] MAL_CLIENT_ID not configured")
-        return
-      }
-
-      console.log("[v0] Starting OAuth flow...")
-
-      const codeVerifier = generateCodeVerifier()
-      const codeChallenge = await generateCodeChallenge(codeVerifier)
-      
-      localStorage.setItem(STORAGE_KEYS.CODE_VERIFIER, codeVerifier)
-
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin
-      const redirectUri = `${appUrl}/api/auth/mal/callback`
-      
-      console.log("[v0] Redirect URI:", redirectUri)
-      
-      const authUrl = new URL("https://myanimelist.net/v1/oauth2/authorize")
-      authUrl.searchParams.set("response_type", "code")
-      authUrl.searchParams.set("client_id", clientId)
-      authUrl.searchParams.set("redirect_uri", redirectUri)
-      authUrl.searchParams.set("code_challenge", codeChallenge)
-      authUrl.searchParams.set("code_challenge_method", "S256")
-      authUrl.searchParams.set("state", "mal_auth")
-
-      window.location.href = authUrl.toString()
-    } catch (error) {
-      console.error("[v0] Login error:", error)
-      setError("Erro ao iniciar login. Tente novamente.")
-    }
+    setIsLoading(false)
   }, [])
 
-  const fetchAnimeList = useCallback(async (status?: string) => {
-    try {
-      setIsLoadingList(true)
-      const accessToken = localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN)
-      if (!accessToken) throw new Error("Not authenticated")
-
-      const url = new URL("/api/auth/mal/animelist", window.location.origin)
-      if (status) url.searchParams.set("status", status)
-      url.searchParams.set("fields", "list_status,synopsis,mean,num_episodes,status,genres,studios,start_season")
-      url.searchParams.set("limit", "100")
-
-      const response = await fetch(url.toString(), {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      })
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          await refreshToken()
-          return fetchAnimeList(status)
-        }
-        throw new Error("Failed to fetch anime list")
-      }
-
-      const data = await response.json()
-      setAnimeList(data.data || [])
-    } catch (error) {
-      console.error("[v0] Error fetching anime list:", error)
-    } finally {
-      setIsLoadingList(false)
-    }
-  }, [refreshToken])
-
-  const updateAnimeStatus = useCallback(async (
-    animeId: number, 
-    status: string, 
-    episodesWatched?: number,
-    score?: number
+  // Fetch anime list
+  const fetchAnimeListFn = useCallback(async (
+    status?: "watching" | "completed" | "on_hold" | "dropped" | "plan_to_watch"
   ) => {
+    const username = localStorage.getItem(STORAGE_KEYS.USERNAME)
+    if (!username) return
+
+    setIsLoadingList(true)
     try {
-      const accessToken = localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN)
-      if (!accessToken) throw new Error("Not authenticated")
-
-      const response = await fetch(`/api/auth/mal/animelist/${animeId}`, {
-        method: "PATCH",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ status, num_watched_episodes: episodesWatched, score }),
-      })
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          await refreshToken()
-          return updateAnimeStatus(animeId, status, episodesWatched, score)
-        }
-        throw new Error("Failed to update anime status")
-      }
-
-      // Refresh list after update
-      await fetchAnimeList()
-    } catch (error) {
-      console.error("[v0] Error updating anime status:", error)
-      throw error
+      const result = await fetchMALUserAnimeList(username, status)
+      const transformed = result.data.map(transformAnimeEntry)
+      setAnimeList(transformed)
+    } catch (err) {
+      console.error("Failed to fetch anime list:", err)
+      setError("Erro ao buscar lista de animes")
     }
-  }, [fetchAnimeList, refreshToken])
+    setIsLoadingList(false)
+  }, [])
+
+  // Clear error
+  const clearError = useCallback(() => setError(null), [])
 
   return (
     <MALAuthContext.Provider
       value={{
         user,
-        isAuthenticated,
+        isConnected: !!user,
         isLoading,
         error,
         animeList,
         isLoadingList,
-        login,
-        logout,
+        connect,
+        disconnect,
         refreshUserData,
-        fetchAnimeList,
-        updateAnimeStatus,
+        fetchAnimeList: fetchAnimeListFn,
         clearError,
       }}
     >
@@ -406,3 +229,5 @@ export function useMALAuth() {
   }
   return context
 }
+
+export type { MALUser, MALAnimeListItem }

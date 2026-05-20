@@ -777,3 +777,197 @@ interface JikanAnime {
     timezone?: string
   }
 }
+
+// ============================================================================
+// MAL USER FUNCTIONS - Fetch user data by username (no auth required)
+// ============================================================================
+
+export interface MALUserProfile {
+  mal_id: number
+  username: string
+  url: string
+  images: {
+    jpg: { image_url: string }
+    webp: { image_url: string }
+  }
+  last_online: string
+  gender: string | null
+  birthday: string | null
+  location: string | null
+  joined: string
+  statistics: {
+    anime: {
+      days_watched: number
+      mean_score: number
+      watching: number
+      completed: number
+      on_hold: number
+      dropped: number
+      plan_to_watch: number
+      total_entries: number
+      rewatched: number
+      episodes_watched: number
+    }
+  }
+}
+
+export interface MALUserAnimeEntry {
+  entry: {
+    mal_id: number
+    url: string
+    images: {
+      jpg: { image_url: string; large_image_url: string }
+      webp: { image_url: string; large_image_url: string }
+    }
+    title: string
+    type: string
+    episodes: number | null
+    status: string
+    score: number | null
+    genres: { mal_id: number; name: string }[]
+    year: number | null
+  }
+  score: number
+  episodes_watched: number
+  is_rewatching: boolean
+  watch_start_date: string | null
+  watch_end_date: string | null
+}
+
+/**
+ * Fetch MAL user profile by username
+ */
+export async function fetchMALUserProfile(username: string): Promise<MALUserProfile | null> {
+  try {
+    const response = await rateLimitedFetch(`${JIKAN_BASE_URL}/users/${username}/full`)
+    
+    if (!response.ok) {
+      if (response.status === 404) {
+        console.error(`MAL user not found: ${username}`)
+        return null
+      }
+      throw new Error(`Jikan API error: ${response.status}`)
+    }
+    
+    const data = await response.json()
+    return data.data as MALUserProfile
+  } catch (error) {
+    console.error("Failed to fetch MAL user profile:", error)
+    return null
+  }
+}
+
+/**
+ * Fetch MAL user anime list by status
+ */
+export async function fetchMALUserAnimeList(
+  username: string,
+  status?: "watching" | "completed" | "on_hold" | "dropped" | "plan_to_watch",
+  page: number = 1
+): Promise<{ data: MALUserAnimeEntry[]; pagination: { has_next_page: boolean; last_visible_page: number } }> {
+  try {
+    let url = `${JIKAN_BASE_URL}/users/${username}/animelist?page=${page}`
+    if (status) {
+      url += `&status=${status}`
+    }
+    
+    const response = await rateLimitedFetch(url)
+    
+    if (!response.ok) {
+      throw new Error(`Jikan API error: ${response.status}`)
+    }
+    
+    const data = await response.json()
+    return {
+      data: data.data || [],
+      pagination: data.pagination || { has_next_page: false, last_visible_page: 1 }
+    }
+  } catch (error) {
+    console.error("Failed to fetch MAL user anime list:", error)
+    return { data: [], pagination: { has_next_page: false, last_visible_page: 1 } }
+  }
+}
+
+/**
+ * Fetch MAL user statistics
+ */
+export async function fetchMALUserStatistics(username: string): Promise<{
+  anime: {
+    days_watched: number
+    mean_score: number
+    watching: number
+    completed: number
+    on_hold: number
+    dropped: number
+    plan_to_watch: number
+    total_entries: number
+    rewatched: number
+    episodes_watched: number
+  }
+} | null> {
+  try {
+    const response = await rateLimitedFetch(`${JIKAN_BASE_URL}/users/${username}/statistics`)
+    
+    if (!response.ok) {
+      throw new Error(`Jikan API error: ${response.status}`)
+    }
+    
+    const data = await response.json()
+    return data.data
+  } catch (error) {
+    console.error("Failed to fetch MAL user statistics:", error)
+    return null
+  }
+}
+
+/**
+ * Fetch MAL user history (recent activity)
+ */
+export async function fetchMALUserHistory(username: string, type: "anime" | "manga" = "anime"): Promise<Array<{
+  entry: { mal_id: number; name: string; url: string }
+  increment: number
+  date: string
+}>> {
+  try {
+    const response = await rateLimitedFetch(`${JIKAN_BASE_URL}/users/${username}/history?type=${type}`)
+    
+    if (!response.ok) {
+      throw new Error(`Jikan API error: ${response.status}`)
+    }
+    
+    const data = await response.json()
+    return data.data || []
+  } catch (error) {
+    console.error("Failed to fetch MAL user history:", error)
+    return []
+  }
+}
+
+/**
+ * Transform MAL anime entry to AnimeData format
+ */
+export function transformMALUserAnime(entry: MALUserAnimeEntry): AnimeData & { 
+  userScore: number
+  episodesWatched: number
+  userStatus: string
+} {
+  return {
+    id: entry.entry.mal_id.toString(),
+    title: entry.entry.title,
+    image: entry.entry.images.jpg.large_image_url || entry.entry.images.jpg.image_url,
+    score: entry.entry.score || 0,
+    episodes: entry.entry.episodes || 0,
+    status: entry.entry.status,
+    synopsis: "",
+    genres: entry.entry.genres?.map(g => g.name) || [],
+    year: entry.entry.year || 0,
+    studios: [],
+    duration: "",
+    rating: "",
+    popularity: 0,
+    members: 0,
+    userScore: entry.score,
+    episodesWatched: entry.episodes_watched,
+    userStatus: entry.is_rewatching ? "rewatching" : "watching",
+  }
+}
