@@ -79,7 +79,6 @@ export function VideoPlayer() {
 
   // Check if current source is demo or iframe
   useEffect(() => {
-    console.log("[v0] Source check - currentSource:", currentSource?.type, currentSource?.url?.substring(0, 50))
     if (currentSource) {
       const isDemoSource = currentSource.url?.includes("test-streams.mux.dev") || 
                           currentSource.url?.includes("bitdash-a.akamaihd.net") ||
@@ -88,8 +87,6 @@ export function VideoPlayer() {
                        currentSource.url?.includes("megaplay.buzz") ||
                        currentSource.url?.includes("/embed/") ||
                        currentSource.url?.includes("/stream/mal/")
-      
-      console.log("[v0] isDemoSource:", isDemoSource, "isIframe:", isIframe)
       
       setIsDemo(isDemoSource)
       setIsIframeSource(isIframe && !isDemoSource)
@@ -525,13 +522,6 @@ export function VideoPlayer() {
 
       {/* Main Player Container */}
       <div className="relative aspect-video w-full bg-black rounded-lg overflow-hidden border border-border">
-        {/* Debug info */}
-        {process.env.NODE_ENV === "development" && (
-          <div className="absolute top-0 left-0 bg-black/80 text-white text-xs p-1 z-50">
-            iframe:{String(isIframeSource)} url:{streamUrl ? "yes" : "no"} loading:{String(isLoadingStream)} err:{error ? "yes" : "no"}
-          </div>
-        )}
-        
         {/* Iframe Player - when source is iframe type */}
         {isIframeSource && streamUrl && !isLoadingStream && (
           <div className="absolute inset-0 w-full h-full bg-black">
