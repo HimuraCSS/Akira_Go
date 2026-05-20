@@ -96,13 +96,11 @@ export async function searchAnime(
     const data = await response.json()
     
     if (data.error || !data.results || data.results.length === 0) {
-      console.log("[v0] No results from API, using fallback")
       return createDemoSearchResults(query)
     }
     
     return data.results
   } catch (error) {
-    console.log("[v0] Search failed, using fallback:", error)
     return createDemoSearchResults(query)
   }
 }

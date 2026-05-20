@@ -478,19 +478,69 @@ async function tryConsumetGogo(title: string, episode: number): Promise<StreamRe
   }
 }
 
-// Try Megaplay iframe as fallback
+// Try 2anime embed as alternative
+async function try2Anime(title: string, episode: number): Promise<StreamResponse | null> {
+  try {
+    const jikanResult = await searchJikan(title)
+    if (!jikanResult) return null
+    
+    // 2anime uses a different URL structure
+    const embedUrl = `https://2anime.xyz/embed/${jikanResult.mal_id}-episode-${episode}`
+    
+    return {
+      success: true,
+      sources: [
+        { url: embedUrl, quality: "Auto", isM3U8: false, type: "iframe" },
+      ],
+      isIframe: true,
+      provider: "2Anime",
+    }
+  } catch (error) {
+    console.error("[v0] 2anime error:", error)
+    return null
+  }
+}
+
+// Try anime embed sources with MAL ID
+async function tryAnimeEmbed(title: string, episode: number): Promise<StreamResponse | null> {
+  try {
+    const jikanResult = await searchJikan(title)
+    if (!jikanResult) return null
+    
+    const malId = jikanResult.mal_id
+    
+    // Multiple embed sources to try
+    const embedSources = [
+      { url: `https://2anime.xyz/embed/${malId}-episode-${episode}`, name: "2Anime" },
+      { url: `https://embtaku.pro/streaming.php?id=${malId}&episode=${episode}`, name: "EmbTaku" },
+      { url: `https://vidstream.pro/e/${malId}/${episode}`, name: "VidStream" },
+    ]
+    
+    return {
+      success: true,
+      sources: embedSources.map(s => ({
+        url: s.url,
+        quality: s.name,
+        isM3U8: false,
+        type: "iframe" as const,
+      })),
+      isIframe: true,
+      provider: "AnimeEmbed",
+    }
+  } catch (error) {
+    console.error("[v0] AnimeEmbed error:", error)
+    return null
+  }
+}
+
+// Try Megaplay iframe
 async function tryMegaplay(title: string, episode: number): Promise<StreamResponse | null> {
   try {
-    console.log("[v0] Megaplay fallback for:", title)
-    
     const jikanResult = await searchJikan(title)
     
     if (!jikanResult) {
-      console.log("[v0] Megaplay: No MAL ID found")
       return null
     }
-    
-    console.log("[v0] Megaplay MAL ID:", jikanResult.mal_id)
     
     const subUrl = `${MEGAPLAY_BASE}/stream/mal/${jikanResult.mal_id}/${episode}/sub`
     const dubUrl = `${MEGAPLAY_BASE}/stream/mal/${jikanResult.mal_id}/${episode}/dub`
@@ -505,7 +555,6 @@ async function tryMegaplay(title: string, episode: number): Promise<StreamRespon
       provider: "Megaplay",
     }
   } catch (error) {
-    console.error("[v0] Megaplay error:", error)
     return null
   }
 }
@@ -526,7 +575,13 @@ export async function GET(request: Request): Promise<NextResponse<StreamResponse
     })
   }
 
-  // Try Megaplay iframe first (most reliable for recent anime)
+  // Try multiple iframe sources (most reliable for anime)
+  const animeEmbedResult = await tryAnimeEmbed(title, episode)
+  if (animeEmbedResult) {
+    return NextResponse.json(animeEmbedResult)
+  }
+
+  // Fallback to Megaplay
   const megaplayResult = await tryMegaplay(title, episode)
   if (megaplayResult) {
     return NextResponse.json(megaplayResult)
