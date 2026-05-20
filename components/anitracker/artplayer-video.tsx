@@ -31,6 +31,8 @@ import {
 import { useStreaming } from "./streaming-context"
 import { cn } from "@/lib/utils"
 
+import { SubtitleSearch } from "./subtitle-search"
+
 export function VideoPlayer() {
   const artRef = useRef<HTMLDivElement>(null)
   const artInstance = useRef<Artplayer | null>(null)
@@ -322,6 +324,18 @@ export function VideoPlayer() {
         </div>
         
         <div className="flex items-center gap-2">
+          {/* PT-BR Subtitle Search */}
+          {currentAnime && currentEpisode && (
+            <SubtitleSearch
+              animeTitle={currentAnime.title}
+              episodeNumber={currentEpisode.number}
+              onSubtitleSelect={(sub) => {
+                // Set the selected subtitle
+                setActiveSubtitle({ url: sub.url, lang: sub.lang })
+              }}
+            />
+          )}
+
           {/* VLC Button & Demo Badge */}
           {isDemo && (
             <Badge variant="outline" className="border-yellow-500/50 text-yellow-500 bg-yellow-500/10 text-xs">
