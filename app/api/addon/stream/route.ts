@@ -478,25 +478,41 @@ async function tryConsumetGogo(title: string, episode: number): Promise<StreamRe
   }
 }
 
-// Try 2anime embed as alternative
-async function try2Anime(title: string, episode: number): Promise<StreamResponse | null> {
+// Try GogoAnime embed (most reliable - uses episode slug)
+async function tryGogoEmbed(title: string, episode: number): Promise<StreamResponse | null> {
   try {
-    const jikanResult = await searchJikan(title)
-    if (!jikanResult) return null
+    // Convert title to GogoAnime slug format
+    const slug = title
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, "")
+      .replace(/\s+/g, "-")
+      .replace(/-+/g, "-")
+      .trim()
     
-    // 2anime uses a different URL structure
-    const embedUrl = `https://2anime.xyz/embed/${jikanResult.mal_id}-episode-${episode}`
+    // Try different slug variations
+    const slugVariations = [
+      slug,
+      slug.replace(/-season-\d+/g, ""),
+      slug.split("-").slice(0, 3).join("-"),
+    ]
+    
+    const sources = slugVariations.flatMap(s => [
+      { url: `https://embtaku.pro/streaming.php?id=${s}-episode-${episode}`, name: `GogoEmbed` },
+      { url: `https://embtaku.pro/embedplus?id=${s}-episode-${episode}`, name: `GogoPlus` },
+    ])
     
     return {
       success: true,
-      sources: [
-        { url: embedUrl, quality: "Auto", isM3U8: false, type: "iframe" },
-      ],
+      sources: sources.map(s => ({
+        url: s.url,
+        quality: s.name,
+        isM3U8: false,
+        type: "iframe" as const,
+      })),
       isIframe: true,
-      provider: "2Anime",
+      provider: "GogoEmbed",
     }
   } catch (error) {
-    console.error("[v0] 2anime error:", error)
     return null
   }
 }
@@ -509,11 +525,10 @@ async function tryAnimeEmbed(title: string, episode: number): Promise<StreamResp
     
     const malId = jikanResult.mal_id
     
-    // Multiple embed sources to try
+    // Multiple embed sources using MAL ID
     const embedSources = [
-      { url: `https://2anime.xyz/embed/${malId}-episode-${episode}`, name: "2Anime" },
-      { url: `https://embtaku.pro/streaming.php?id=${malId}&episode=${episode}`, name: "EmbTaku" },
-      { url: `https://vidstream.pro/e/${malId}/${episode}`, name: "VidStream" },
+      { url: `https://megaplay.buzz/stream/mal/${malId}/${episode}/sub`, name: "SUB" },
+      { url: `https://megaplay.buzz/stream/mal/${malId}/${episode}/dub`, name: "DUB" },
     ]
     
     return {
@@ -524,33 +539,6 @@ async function tryAnimeEmbed(title: string, episode: number): Promise<StreamResp
         isM3U8: false,
         type: "iframe" as const,
       })),
-      isIframe: true,
-      provider: "AnimeEmbed",
-    }
-  } catch (error) {
-    console.error("[v0] AnimeEmbed error:", error)
-    return null
-  }
-}
-
-// Try Megaplay iframe
-async function tryMegaplay(title: string, episode: number): Promise<StreamResponse | null> {
-  try {
-    const jikanResult = await searchJikan(title)
-    
-    if (!jikanResult) {
-      return null
-    }
-    
-    const subUrl = `${MEGAPLAY_BASE}/stream/mal/${jikanResult.mal_id}/${episode}/sub`
-    const dubUrl = `${MEGAPLAY_BASE}/stream/mal/${jikanResult.mal_id}/${episode}/dub`
-    
-    return {
-      success: true,
-      sources: [
-        { url: subUrl, quality: "SUB", isM3U8: false, type: "iframe" },
-        { url: dubUrl, quality: "DUB", isM3U8: false, type: "iframe" },
-      ],
       isIframe: true,
       provider: "Megaplay",
     }
@@ -575,16 +563,16 @@ export async function GET(request: Request): Promise<NextResponse<StreamResponse
     })
   }
 
-  // Try multiple iframe sources (most reliable for anime)
+  // Try GogoAnime embed first (most reliable - uses episode slug)
+  const gogoEmbedResult = await tryGogoEmbed(title, episode)
+  if (gogoEmbedResult) {
+    return NextResponse.json(gogoEmbedResult)
+  }
+
+  // Try Megaplay embed with MAL ID
   const animeEmbedResult = await tryAnimeEmbed(title, episode)
   if (animeEmbedResult) {
     return NextResponse.json(animeEmbedResult)
-  }
-
-  // Fallback to Megaplay
-  const megaplayResult = await tryMegaplay(title, episode)
-  if (megaplayResult) {
-    return NextResponse.json(megaplayResult)
   }
 
   // Try AniWatch API for HLS streams

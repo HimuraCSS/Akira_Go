@@ -183,7 +183,6 @@ export async function getStreamingSources(
     // Always use the addon API which has better error handling
     if (animeTitle) {
       const episodeNumber = episodeId.match(/episode-(\d+)$/)?.[1] || "1"
-      console.log("[v0] Fetching stream for:", animeTitle, "episode:", episodeNumber)
       
       const addonResponse = await fetch(
         `/api/addon/stream?title=${encodeURIComponent(animeTitle)}&episode=${episodeNumber}&provider=${provider}`
