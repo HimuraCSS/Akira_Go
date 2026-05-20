@@ -349,9 +349,9 @@ export function VideoPlayer() {
   }
 
   return (
-    <section className="py-6">
+    <section className="py-6" data-player-section>
       <div className="container mx-auto px-6 lg:px-8">
-        <div className="max-w-4xl mx-auto space-y-3">
+        <div className="max-w-5xl mx-auto space-y-3">
       {/* Player Status Bar - Compact */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">

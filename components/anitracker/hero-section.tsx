@@ -38,52 +38,50 @@ export function HeroSection({ onOpenAddons, onWatchNow }: HeroSectionProps) {
       try {
         setIsLoading(true)
         
-        // Get current season info
-        const now = new Date()
-        const month = now.getMonth() + 1
-        const year = now.getFullYear()
-        let season: string
-        
-        if (month >= 1 && month <= 3) season = "winter"
-        else if (month >= 4 && month <= 6) season = "spring"
-        else if (month >= 7 && month <= 9) season = "summer"
-        else season = "fall"
-        
-        // Fetch top anime from current season sorted by score
+        // Fetch top airing anime (most popular currently airing)
         const response = await fetch(
-          `https://api.jikan.moe/v4/seasons/${year}/${season}?filter=tv&sfw=true&order_by=score&sort=desc&limit=10`
+          `https://api.jikan.moe/v4/top/anime?filter=airing&sfw=true&limit=8`
         )
         
         if (!response.ok) throw new Error("Failed to fetch")
         
         const data = await response.json()
         
-        const transformed: HeroAnime[] = data.data
-          .filter((anime: any) => anime.images?.jpg?.large_image_url && anime.score && anime.score > 7)
-          .slice(0, 6)
-          .map((anime: any) => ({
+        // For each anime, try to get better banner from full details
+        const animesWithBanners: HeroAnime[] = []
+        
+        for (const anime of data.data.slice(0, 6)) {
+          // Use trailer thumbnail for HD banner (maxresdefault)
+          let bannerImage = anime.images?.jpg?.large_image_url
+          
+          if (anime.trailer?.youtube_id) {
+            // YouTube maxresdefault gives highest quality
+            bannerImage = `https://img.youtube.com/vi/${anime.trailer.youtube_id}/maxresdefault.jpg`
+          } else if (anime.trailer?.images?.maximum_image_url) {
+            bannerImage = anime.trailer.images.maximum_image_url
+          }
+          
+          animesWithBanners.push({
             id: anime.mal_id.toString(),
             title: anime.title,
-            image: anime.images.jpg.large_image_url,
-            // Use trailer image for better banner quality, fallback to large image
-            bannerImage: anime.trailer?.images?.maximum_image_url || 
-                         anime.images.webp?.large_image_url || 
-                         anime.images.jpg.large_image_url,
+            image: anime.images?.jpg?.large_image_url || anime.images?.jpg?.image_url,
+            bannerImage,
             score: anime.score || 0,
             episodes: anime.episodes || 0,
             status: anime.status || "Em exibicao",
             synopsis: anime.synopsis || "",
             genres: anime.genres?.map((g: any) => g.name) || [],
-            year: anime.year || year,
+            year: anime.year || new Date().getFullYear(),
             studio: anime.studios?.[0]?.name || "",
             studios: anime.studios?.map((s: any) => s.name) || [],
             duration: anime.duration?.replace(" per ep", "") || "",
             rating: anime.rating || "",
             popularity: anime.popularity || 0,
             members: anime.members || 0,
-          }))
+          })
+        }
         
-        setAnimes(transformed)
+        setAnimes(animesWithBanners.filter(a => a.score > 0))
       } catch (error) {
         console.error("Failed to fetch seasonal anime:", error)
         setAnimes([])
@@ -132,31 +130,43 @@ export function HeroSection({ onOpenAddons, onWatchNow }: HeroSectionProps) {
     const currentAnime = animes[currentIndex]
     if (!currentAnime) return
     
-    // Load anime episodes for the current hero anime
-    await loadAnimeEpisodes(currentAnime.id, currentAnime.title, currentAnime.image)
-    
-    // Play first episode
-    const firstEpisode = {
-      id: `${currentAnime.id}-ep-1`,
-      number: 1,
-      title: "Episodio 1",
-      thumbnail: currentAnime.image,
-      duration: currentAnime.duration || "24:00",
-      animeId: currentAnime.id,
-      animeTitle: currentAnime.title,
-    }
-    
-    await playEpisode(firstEpisode)
-    
-    // Scroll to player section
-    setTimeout(() => {
-      const playerElement = document.querySelector('section.py-6')
-      if (playerElement) {
-        playerElement.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    try {
+      // Load anime episodes for the current hero anime
+      await loadAnimeEpisodes(currentAnime.id, currentAnime.title, currentAnime.image)
+      
+      // Small delay to ensure episodes are loaded
+      await new Promise(resolve => setTimeout(resolve, 500))
+      
+      // Play first episode
+      const firstEpisode = {
+        id: `${currentAnime.id}-ep-1`,
+        number: 1,
+        title: "Episodio 1",
+        thumbnail: currentAnime.image,
+        duration: currentAnime.duration || "24:00",
+        animeId: currentAnime.id,
+        animeTitle: currentAnime.title,
       }
-    }, 100)
-    
-    onWatchNow()
+      
+      await playEpisode(firstEpisode)
+      
+      // Scroll to player section after a brief delay
+      setTimeout(() => {
+        const playerSection = document.querySelector('[data-player-section]') || 
+                            document.querySelector('section.py-6') ||
+                            document.querySelector('[class*="artplayer"]')?.closest('section')
+        if (playerSection) {
+          playerSection.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        } else {
+          // Fallback: scroll down by viewport height
+          window.scrollBy({ top: window.innerHeight * 0.7, behavior: 'smooth' })
+        }
+      }, 200)
+      
+      onWatchNow()
+    } catch (error) {
+      console.error("Failed to start playback:", error)
+    }
   }, [animes, currentIndex, loadAnimeEpisodes, playEpisode, onWatchNow])
 
   const currentAnime = animes[currentIndex]
@@ -225,8 +235,8 @@ export function HeroSection({ onOpenAddons, onWatchNow }: HeroSectionProps) {
               src={anime.bannerImage || anime.image}
               alt={anime.title}
               fill
-              priority={index < 2}
-              quality={90}
+              priority={index === 0}
+              loading={index < 2 ? "eager" : "lazy"}
               sizes="100vw"
               className="object-cover object-center"
             />
