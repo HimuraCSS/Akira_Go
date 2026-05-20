@@ -1,20 +1,20 @@
 import { NextResponse } from "next/server"
+import { searchAnime, getEpisodes, getEpisodeServers, getStreamingSources } from "@/lib/hianime/scraper"
 
-// anime-mapper API - maps AniList IDs to streaming platforms
-const ANIME_MAPPER_BASE = "https://anime-mapper.vercel.app"
-
-// Jikan API for anime metadata (MyAnimeList)
+// Jikan API for anime metadata (MyAnimeList) - fallback
 const JIKAN_BASE = "https://api.jikan.moe/v4"
 
 // Megaplay embed URL format (fallback)
 const MEGAPLAY_BASE = "https://megaplay.buzz"
+
+// M3U8 Proxy URL
+const M3U8_PROXY = "/api/proxy/m3u8"
 
 interface StreamSource {
   url: string
   quality: string
   isM3U8: boolean
   type?: string
-  size?: number
 }
 
 interface StreamResponse {
@@ -49,331 +49,215 @@ function normalizeTitle(title: string): string {
     .trim()
 }
 
-// Search anime in Jikan (MyAnimeList) to get AniList ID
-async function searchJikan(title: string): Promise<{ mal_id: number; title: string; episodes: number | null } | null> {
-  const searchTerms = [
-    title,
-    normalizeTitle(title),
-    title.split(":")[0].trim(),
-  ]
+// Proxy M3U8 URL to avoid CORS
+function proxyUrl(url: string, headers?: Record<string, string>): string {
+  const baseProxy = `${M3U8_PROXY}?url=${encodeURIComponent(url)}`
+  if (headers) {
+    return `${baseProxy}&headers=${encodeURIComponent(JSON.stringify(headers))}`
+  }
+  return baseProxy
+}
+
+// Search anime in Jikan (MyAnimeList) to get MAL ID for Megaplay fallback
+async function searchJikan(title: string): Promise<{ mal_id: number; title: string } | null> {
+  const searchTerms = [title, normalizeTitle(title), title.split(":")[0].trim()]
   
   for (const term of searchTerms) {
     try {
       const url = `${JIKAN_BASE}/anime?q=${encodeURIComponent(term)}&limit=5&sfw=true`
-      console.log("[v0] Jikan search:", url)
       
       const response = await fetch(url, {
-        signal: AbortSignal.timeout(8000),
+        signal: AbortSignal.timeout(5000),
         headers: { Accept: "application/json" },
       })
       
-      if (!response.ok) {
-        if (response.status === 429) {
-          await new Promise(r => setTimeout(r, 1000))
-          continue
-        }
-        continue
-      }
+      if (!response.ok) continue
       
       const data = await response.json()
       const results = data.data || []
       
-      if (results.length > 0) {
-        // Find best match
-        const lowerTitle = title.toLowerCase()
-        const exact = results.find((r: { title: string }) => 
-          r.title.toLowerCase() === lowerTitle
-        )
-        const partial = results.find((r: { title: string; title_english?: string }) => 
-          r.title.toLowerCase().includes(term.toLowerCase()) ||
-          r.title_english?.toLowerCase().includes(term.toLowerCase())
-        )
-        const result = exact || partial || results[0]
-        console.log("[v0] Jikan found:", result.mal_id, result.title)
-        return {
-          mal_id: result.mal_id,
-          title: result.title,
-          episodes: result.episodes,
+      // Find best match
+      const normalizedSearch = normalizeTitle(term)
+      for (const anime of results) {
+        const titles = [
+          anime.title?.toLowerCase(),
+          anime.title_english?.toLowerCase(),
+          ...(anime.titles?.map((t: { title: string }) => t.title.toLowerCase()) || [])
+        ].filter(Boolean)
+        
+        for (const t of titles) {
+          if (t.includes(normalizedSearch) || normalizedSearch.includes(t)) {
+            return { mal_id: anime.mal_id, title: anime.title }
+          }
         }
       }
-    } catch (error) {
-      console.log("[v0] Jikan error:", error)
+      
+      // Return first result if no exact match
+      if (results.length > 0) {
+        return { mal_id: results[0].mal_id, title: results[0].title }
+      }
+    } catch {
       continue
     }
   }
+  
   return null
 }
 
-// Get AniList ID from MAL ID
-async function getAnilistId(malId: number): Promise<number | null> {
+// Try HiAnime API for HLS streams
+async function tryHiAnime(title: string, episode: number): Promise<StreamResponse | null> {
   try {
-    const query = `
-      query ($malId: Int) {
-        Media(idMal: $malId, type: ANIME) {
-          id
-        }
+    console.log("[v0] HiAnime search:", title)
+    
+    // Search for the anime
+    const searchResult = await searchAnime(title)
+    
+    if (!searchResult.results.length) {
+      // Try normalized title
+      const normalizedSearch = await searchAnime(normalizeTitle(title))
+      if (!normalizedSearch.results.length) {
+        console.log("[v0] HiAnime: No results found")
+        return null
       }
-    `
-    const response = await fetch("https://graphql.anilist.co", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query, variables: { malId } }),
-      signal: AbortSignal.timeout(5000),
-    })
+      searchResult.results = normalizedSearch.results
+    }
     
-    if (!response.ok) return null
+    // Get best match
+    const anime = searchResult.results[0]
+    console.log("[v0] HiAnime found:", anime.id, anime.name)
     
-    const data = await response.json()
-    return data?.data?.Media?.id || null
-  } catch {
+    // Get episodes
+    const episodes = await getEpisodes(anime.id)
+    console.log("[v0] HiAnime episodes:", episodes.length)
+    
+    if (!episodes.length) {
+      return null
+    }
+    
+    // Find the requested episode
+    const targetEpisode = episodes.find(ep => ep.number === episode) || episodes[0]
+    console.log("[v0] HiAnime episode:", targetEpisode.number, targetEpisode.episodeId)
+    
+    // Get servers
+    const servers = await getEpisodeServers(targetEpisode.episodeId)
+    console.log("[v0] HiAnime servers - sub:", servers.sub.length, "dub:", servers.dub.length)
+    
+    // Try each server (prioritize sub)
+    const serverList = [...servers.sub, ...servers.dub, ...servers.raw]
+    
+    for (const server of serverList) {
+      try {
+        console.log("[v0] HiAnime trying server:", server.serverName, server.serverId)
+        
+        const streamInfo = await getStreamingSources(
+          targetEpisode.episodeId,
+          server.serverId,
+          server.type
+        )
+        
+        if (streamInfo && streamInfo.sources.length > 0) {
+          console.log("[v0] HiAnime stream found:", streamInfo.sources.length, "sources")
+          
+          // Proxy the HLS URLs
+          const proxiedSources = streamInfo.sources.map(source => ({
+            ...source,
+            url: source.isM3U8 ? proxyUrl(source.url, streamInfo.headers) : source.url,
+          }))
+          
+          return {
+            success: true,
+            sources: proxiedSources,
+            subtitles: streamInfo.subtitles,
+            intro: streamInfo.intro,
+            outro: streamInfo.outro,
+            provider: `HiAnime (${server.serverName})`,
+          }
+        }
+      } catch (err) {
+        console.log("[v0] HiAnime server error:", server.serverName, err)
+        continue
+      }
+    }
+    
     return null
-  }
-}
-
-// Try anime-mapper API for HLS streams (AnimeKai provider)
-async function tryAnimeMapper(anilistId: number, episodeNumber: number): Promise<StreamResponse | null> {
-  try {
-    // First, get AnimeKai mapping
-    const mapUrl = `${ANIME_MAPPER_BASE}/animekai/map/${anilistId}`
-    console.log("[v0] AnimeMapper mapping:", mapUrl)
-    
-    const mapResponse = await fetch(mapUrl, {
-      signal: AbortSignal.timeout(10000),
-      headers: { Accept: "application/json" },
-    })
-    
-    if (!mapResponse.ok) {
-      console.log("[v0] AnimeMapper map failed:", mapResponse.status)
-      return null
-    }
-    
-    const mapData = await mapResponse.json()
-    const animekai = mapData.animekai
-    
-    if (!animekai || !animekai.episodes || animekai.episodes.length === 0) {
-      console.log("[v0] AnimeMapper: no episodes found")
-      return null
-    }
-    
-    console.log("[v0] AnimeMapper found:", animekai.title, "episodes:", animekai.episodes.length)
-    
-    // Find the episode
-    const episode = animekai.episodes.find((ep: { number: number }) => ep.number === episodeNumber) 
-                   || animekai.episodes[episodeNumber - 1]
-                   || animekai.episodes[0]
-    
-    if (!episode || !episode.id) {
-      console.log("[v0] AnimeMapper: episode not found")
-      return null
-    }
-    
-    // Get streaming sources
-    const sourcesUrl = `${ANIME_MAPPER_BASE}/animekai/sources/${episode.id}`
-    console.log("[v0] AnimeMapper sources:", sourcesUrl)
-    
-    const sourcesResponse = await fetch(sourcesUrl, {
-      signal: AbortSignal.timeout(15000),
-      headers: { Accept: "application/json" },
-    })
-    
-    if (!sourcesResponse.ok) {
-      console.log("[v0] AnimeMapper sources failed:", sourcesResponse.status)
-      return null
-    }
-    
-    const sourcesData = await sourcesResponse.json()
-    
-    if (!sourcesData.sources || sourcesData.sources.length === 0) {
-      console.log("[v0] AnimeMapper: no sources")
-      return null
-    }
-    
-    console.log("[v0] AnimeMapper success! Sources:", sourcesData.sources.length)
-    
-    return {
-      success: true,
-      sources: sourcesData.sources.map((s: { url: string; quality: string; isM3U8?: boolean; size?: number }) => ({
-        url: s.url,
-        quality: s.quality || "auto",
-        isM3U8: s.isM3U8 !== false,
-        type: "hls",
-        size: s.size,
-      })),
-      subtitles: sourcesData.subtitles || [],
-      intro: sourcesData.intro,
-      outro: sourcesData.outro,
-      headers: sourcesData.headers || { Referer: "https://kwik.cx/" },
-      isIframe: false,
-      isDemo: false,
-      provider: "animekai",
-    }
   } catch (error) {
-    console.log("[v0] AnimeMapper error:", error)
+    console.error("[v0] HiAnime error:", error)
     return null
   }
 }
 
-// Try AnimePahe as alternative
-async function tryAnimePahe(anilistId: number, episodeNumber: number): Promise<StreamResponse | null> {
+// Try Megaplay iframe as fallback
+async function tryMegaplay(title: string, episode: number): Promise<StreamResponse | null> {
   try {
-    const mapUrl = `${ANIME_MAPPER_BASE}/animepahe/map/${anilistId}`
-    console.log("[v0] AnimePahe mapping:", mapUrl)
+    console.log("[v0] Megaplay fallback for:", title)
     
-    const mapResponse = await fetch(mapUrl, {
-      signal: AbortSignal.timeout(10000),
-      headers: { Accept: "application/json" },
-    })
-    
-    if (!mapResponse.ok) return null
-    
-    const mapData = await mapResponse.json()
-    const animepahe = mapData.animepahe
-    
-    if (!animepahe || !animepahe.episodes?.data || animepahe.episodes.data.length === 0) {
-      return null
-    }
-    
-    console.log("[v0] AnimePahe found:", animepahe.title)
-    
-    // Find episode
-    const episodes = animepahe.episodes.data
-    const episode = episodes.find((ep: { episode: number }) => ep.episode === episodeNumber) 
-                   || episodes[episodeNumber - 1]
-                   || episodes[0]
-    
-    if (!episode || !episode.id) return null
-    
-    // Get sources
-    const sourcesUrl = `${ANIME_MAPPER_BASE}/animepahe/sources/${animepahe.id}/${episode.id}`
-    console.log("[v0] AnimePahe sources:", sourcesUrl)
-    
-    const sourcesResponse = await fetch(sourcesUrl, {
-      signal: AbortSignal.timeout(15000),
-      headers: { Accept: "application/json" },
-    })
-    
-    if (!sourcesResponse.ok) return null
-    
-    const sourcesData = await sourcesResponse.json()
-    
-    if (!sourcesData.sources || sourcesData.sources.length === 0) return null
-    
-    console.log("[v0] AnimePahe success! Sources:", sourcesData.sources.length)
-    
-    return {
-      success: true,
-      sources: sourcesData.sources.map((s: { url: string; quality: string; isM3U8?: boolean; size?: number }) => ({
-        url: s.url,
-        quality: s.quality || "auto",
-        isM3U8: s.isM3U8 !== false,
-        type: "hls",
-        size: s.size,
-      })),
-      headers: sourcesData.headers || { Referer: "https://kwik.cx/" },
-      isIframe: false,
-      isDemo: false,
-      provider: "animepahe",
-    }
-  } catch (error) {
-    console.log("[v0] AnimePahe error:", error)
-    return null
-  }
-}
-
-// Megaplay iframe as final fallback
-function getMegaplayStream(malId: number, episodeNumber: number): StreamResponse {
-  const subUrl = `${MEGAPLAY_BASE}/stream/mal/${malId}/${episodeNumber}/sub`
-  const dubUrl = `${MEGAPLAY_BASE}/stream/mal/${malId}/${episodeNumber}/dub`
-  
-  return {
-    success: true,
-    sources: [
-      { url: subUrl, quality: "Legendado", isM3U8: false, type: "iframe" },
-      { url: dubUrl, quality: "Dublado", isM3U8: false, type: "iframe" },
-    ],
-    isIframe: true,
-    isDemo: false,
-    provider: "megaplay",
-  }
-}
-
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url)
-  const animeTitle = searchParams.get("title")
-  const episodeNumber = parseInt(searchParams.get("episode") || "1")
-  
-  console.log("[v0] Stream request:", { animeTitle, episodeNumber })
-  
-  if (!animeTitle) {
-    return NextResponse.json({ error: "Missing title", sources: [] }, { status: 400 })
-  }
-  
-  try {
-    // Step 1: Search Jikan for MAL ID
-    console.log("[v0] Step 1: Searching Jikan...")
-    const jikanResult = await searchJikan(animeTitle)
+    // Get MAL ID from Jikan
+    const jikanResult = await searchJikan(title)
     
     if (!jikanResult) {
-      console.log("[v0] Anime not found in Jikan, using demo")
-      return NextResponse.json({
-        success: true,
-        sources: DEMO_STREAMS,
-        isDemo: true,
-        error: "Anime not found",
-      })
+      console.log("[v0] Megaplay: No MAL ID found")
+      return null
     }
     
-    // Step 2: Get AniList ID from MAL ID
-    console.log("[v0] Step 2: Getting AniList ID for MAL:", jikanResult.mal_id)
-    const anilistId = await getAnilistId(jikanResult.mal_id)
+    console.log("[v0] Megaplay MAL ID:", jikanResult.mal_id)
     
-    if (!anilistId) {
-      console.log("[v0] AniList ID not found, using Megaplay fallback")
-      return NextResponse.json(getMegaplayStream(jikanResult.mal_id, episodeNumber))
-    }
+    // Generate Megaplay URLs
+    const subUrl = `${MEGAPLAY_BASE}/stream/mal/${jikanResult.mal_id}/${episode}/sub`
+    const dubUrl = `${MEGAPLAY_BASE}/stream/mal/${jikanResult.mal_id}/${episode}/dub`
     
-    console.log("[v0] AniList ID:", anilistId)
-    
-    // Step 3: Try anime-mapper providers
-    console.log("[v0] Step 3: Trying AnimeKai...")
-    let result = await tryAnimeMapper(anilistId, episodeNumber)
-    
-    if (!result) {
-      console.log("[v0] Step 4: Trying AnimePahe...")
-      result = await tryAnimePahe(anilistId, episodeNumber)
-    }
-    
-    if (result) {
-      return NextResponse.json({
-        ...result,
-        anime: {
-          title: jikanResult.title,
-          malId: jikanResult.mal_id,
-          anilistId,
-        },
-        episode: episodeNumber,
-      })
-    }
-    
-    // Step 5: Megaplay iframe fallback
-    console.log("[v0] Step 5: Using Megaplay iframe fallback")
-    return NextResponse.json({
-      ...getMegaplayStream(jikanResult.mal_id, episodeNumber),
-      anime: {
-        title: jikanResult.title,
-        malId: jikanResult.mal_id,
-        anilistId,
-      },
-      episode: episodeNumber,
-    })
-    
-  } catch (error) {
-    console.error("[v0] Stream API error:", error)
-    return NextResponse.json({
+    return {
       success: true,
-      sources: DEMO_STREAMS,
+      sources: [
+        { url: subUrl, quality: "SUB", isM3U8: false, type: "iframe" },
+        { url: dubUrl, quality: "DUB", isM3U8: false, type: "iframe" },
+      ],
+      isIframe: true,
+      provider: "Megaplay",
+    }
+  } catch (error) {
+    console.error("[v0] Megaplay error:", error)
+    return null
+  }
+}
+
+export async function GET(request: Request): Promise<NextResponse<StreamResponse>> {
+  const { searchParams } = new URL(request.url)
+  const title = searchParams.get("title")
+  const episodeStr = searchParams.get("episode") || "1"
+  const episode = parseInt(episodeStr)
+  const preferHls = searchParams.get("preferHls") !== "false"
+
+  if (!title) {
+    return NextResponse.json({
+      success: false,
+      sources: [],
       isDemo: true,
-      error: "Stream fetch failed",
+      provider: "Demo",
     })
   }
+
+  console.log("[v0] Stream request:", title, "ep:", episode, "preferHls:", preferHls)
+
+  // Try HiAnime first for HLS streams
+  if (preferHls) {
+    const hiAnimeResult = await tryHiAnime(title, episode)
+    if (hiAnimeResult) {
+      return NextResponse.json(hiAnimeResult)
+    }
+  }
+
+  // Fallback to Megaplay iframe
+  const megaplayResult = await tryMegaplay(title, episode)
+  if (megaplayResult) {
+    return NextResponse.json(megaplayResult)
+  }
+
+  // Last resort: demo streams
+  console.log("[v0] Using demo streams")
+  return NextResponse.json({
+    success: true,
+    sources: DEMO_STREAMS,
+    isDemo: true,
+    provider: "Demo",
+  })
 }
