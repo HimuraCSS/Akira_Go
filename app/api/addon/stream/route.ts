@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server"
-import { searchAnime, getEpisodes, getEpisodeServers, getStreamingSources } from "@/lib/hianime/scraper"
+
+// AniWatch API (public instance)
+const ANIWATCH_API = "https://api-aniwatch.onrender.com"
 
 // Jikan API for anime metadata (MyAnimeList) - fallback
 const JIKAN_BASE = "https://api.jikan.moe/v4"
 
-// Megaplay embed URL format (fallback)
+// Megaplay embed URL format (final fallback)
 const MEGAPLAY_BASE = "https://megaplay.buzz"
 
 // M3U8 Proxy URL
@@ -29,7 +31,7 @@ interface StreamResponse {
   provider?: string
 }
 
-// Demo streams as fallback
+// Demo streams as last fallback
 const DEMO_STREAMS: StreamSource[] = [
   {
     url: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
@@ -58,7 +60,166 @@ function proxyUrl(url: string, headers?: Record<string, string>): string {
   return baseProxy
 }
 
-// Search anime in Jikan (MyAnimeList) to get MAL ID for Megaplay fallback
+// Try AniWatch API for HLS streams (primary source)
+async function tryAniWatch(title: string, episode: number): Promise<StreamResponse | null> {
+  try {
+    console.log("[v0] AniWatch search:", title)
+    
+    // Search for anime
+    const searchUrl = `${ANIWATCH_API}/api/v2/hianime/search?q=${encodeURIComponent(title)}`
+    const searchRes = await fetch(searchUrl, {
+      signal: AbortSignal.timeout(10000),
+      headers: { Accept: "application/json" },
+    })
+    
+    if (!searchRes.ok) {
+      console.log("[v0] AniWatch search failed:", searchRes.status)
+      return null
+    }
+    
+    const searchData = await searchRes.json()
+    const animes = searchData.data?.animes || []
+    
+    if (!animes.length) {
+      // Try normalized title
+      const normalizedUrl = `${ANIWATCH_API}/api/v2/hianime/search?q=${encodeURIComponent(normalizeTitle(title))}`
+      const normalizedRes = await fetch(normalizedUrl, {
+        signal: AbortSignal.timeout(10000),
+        headers: { Accept: "application/json" },
+      })
+      
+      if (normalizedRes.ok) {
+        const normalizedData = await normalizedRes.json()
+        if (normalizedData.data?.animes?.length) {
+          animes.push(...normalizedData.data.animes)
+        }
+      }
+    }
+    
+    if (!animes.length) {
+      console.log("[v0] AniWatch: No results found")
+      return null
+    }
+    
+    // Get best match
+    const anime = animes[0]
+    console.log("[v0] AniWatch found:", anime.id, anime.name)
+    
+    // Get episodes
+    const episodesUrl = `${ANIWATCH_API}/api/v2/hianime/anime/${anime.id}/episodes`
+    const episodesRes = await fetch(episodesUrl, {
+      signal: AbortSignal.timeout(10000),
+      headers: { Accept: "application/json" },
+    })
+    
+    if (!episodesRes.ok) {
+      console.log("[v0] AniWatch episodes failed:", episodesRes.status)
+      return null
+    }
+    
+    const episodesData = await episodesRes.json()
+    const episodes = episodesData.data?.episodes || []
+    
+    if (!episodes.length) {
+      console.log("[v0] AniWatch: No episodes found")
+      return null
+    }
+    
+    console.log("[v0] AniWatch episodes:", episodes.length)
+    
+    // Find the requested episode
+    const targetEpisode = episodes.find((ep: { number: number }) => ep.number === episode) || episodes[0]
+    console.log("[v0] AniWatch episode:", targetEpisode.number, targetEpisode.episodeId)
+    
+    // Get episode servers
+    const serversUrl = `${ANIWATCH_API}/api/v2/hianime/episode/servers?animeEpisodeId=${targetEpisode.episodeId}`
+    const serversRes = await fetch(serversUrl, {
+      signal: AbortSignal.timeout(10000),
+      headers: { Accept: "application/json" },
+    })
+    
+    if (!serversRes.ok) {
+      console.log("[v0] AniWatch servers failed:", serversRes.status)
+      return null
+    }
+    
+    const serversData = await serversRes.json()
+    const subServers = serversData.data?.sub || []
+    const dubServers = serversData.data?.dub || []
+    const allServers = [...subServers, ...dubServers]
+    
+    console.log("[v0] AniWatch servers - sub:", subServers.length, "dub:", dubServers.length)
+    
+    // Try servers (prioritize HD-1, HD-2)
+    const serverPriority = ["hd-1", "hd-2", "megacloud", "streamsb", "vidstreaming"]
+    const sortedServers = allServers.sort((a: { serverName: string }, b: { serverName: string }) => {
+      const aIdx = serverPriority.indexOf(a.serverName.toLowerCase())
+      const bIdx = serverPriority.indexOf(b.serverName.toLowerCase())
+      return (aIdx === -1 ? 999 : aIdx) - (bIdx === -1 ? 999 : bIdx)
+    })
+    
+    for (const server of sortedServers) {
+      try {
+        const category = subServers.includes(server) ? "sub" : "dub"
+        const sourcesUrl = `${ANIWATCH_API}/api/v2/hianime/episode/sources?animeEpisodeId=${targetEpisode.episodeId}&server=${server.serverName}&category=${category}`
+        
+        console.log("[v0] AniWatch trying:", server.serverName, category)
+        
+        const sourcesRes = await fetch(sourcesUrl, {
+          signal: AbortSignal.timeout(15000),
+          headers: { Accept: "application/json" },
+        })
+        
+        if (!sourcesRes.ok) continue
+        
+        const sourcesData = await sourcesRes.json()
+        const sources = sourcesData.data?.sources || []
+        const tracks = sourcesData.data?.tracks || []
+        const intro = sourcesData.data?.intro
+        const outro = sourcesData.data?.outro
+        
+        if (sources.length > 0) {
+          console.log("[v0] AniWatch stream found:", sources.length, "sources")
+          
+          // Process sources - proxy through our M3U8 proxy
+          const processedSources: StreamSource[] = sources.map((source: { url: string; quality?: string; type?: string }) => ({
+            url: proxyUrl(source.url),
+            quality: source.quality || "Auto",
+            isM3U8: source.url.includes(".m3u8"),
+            type: "hls",
+          }))
+          
+          // Process subtitles
+          const subtitles = tracks
+            .filter((t: { kind: string }) => t.kind === "captions")
+            .map((t: { file: string; label: string }) => ({
+              url: t.file,
+              lang: t.label || "Unknown",
+            }))
+          
+          return {
+            success: true,
+            sources: processedSources,
+            subtitles,
+            intro: intro ? { start: intro.start || 0, end: intro.end || 0 } : undefined,
+            outro: outro ? { start: outro.start || 0, end: outro.end || 0 } : undefined,
+            provider: `AniWatch (${server.serverName})`,
+          }
+        }
+      } catch (err) {
+        console.log("[v0] AniWatch server error:", server.serverName, err)
+        continue
+      }
+    }
+    
+    return null
+  } catch (error) {
+    console.error("[v0] AniWatch error:", error)
+    return null
+  }
+}
+
+// Search Jikan for MAL ID (for Megaplay fallback)
 async function searchJikan(title: string): Promise<{ mal_id: number; title: string } | null> {
   const searchTerms = [title, normalizeTitle(title), title.split(":")[0].trim()]
   
@@ -76,23 +237,6 @@ async function searchJikan(title: string): Promise<{ mal_id: number; title: stri
       const data = await response.json()
       const results = data.data || []
       
-      // Find best match
-      const normalizedSearch = normalizeTitle(term)
-      for (const anime of results) {
-        const titles = [
-          anime.title?.toLowerCase(),
-          anime.title_english?.toLowerCase(),
-          ...(anime.titles?.map((t: { title: string }) => t.title.toLowerCase()) || [])
-        ].filter(Boolean)
-        
-        for (const t of titles) {
-          if (t.includes(normalizedSearch) || normalizedSearch.includes(t)) {
-            return { mal_id: anime.mal_id, title: anime.title }
-          }
-        }
-      }
-      
-      // Return first result if no exact match
       if (results.length > 0) {
         return { mal_id: results[0].mal_id, title: results[0].title }
       }
@@ -104,94 +248,11 @@ async function searchJikan(title: string): Promise<{ mal_id: number; title: stri
   return null
 }
 
-// Try HiAnime API for HLS streams
-async function tryHiAnime(title: string, episode: number): Promise<StreamResponse | null> {
-  try {
-    console.log("[v0] HiAnime search:", title)
-    
-    // Search for the anime
-    const searchResult = await searchAnime(title)
-    
-    if (!searchResult.results.length) {
-      // Try normalized title
-      const normalizedSearch = await searchAnime(normalizeTitle(title))
-      if (!normalizedSearch.results.length) {
-        console.log("[v0] HiAnime: No results found")
-        return null
-      }
-      searchResult.results = normalizedSearch.results
-    }
-    
-    // Get best match
-    const anime = searchResult.results[0]
-    console.log("[v0] HiAnime found:", anime.id, anime.name)
-    
-    // Get episodes
-    const episodes = await getEpisodes(anime.id)
-    console.log("[v0] HiAnime episodes:", episodes.length)
-    
-    if (!episodes.length) {
-      return null
-    }
-    
-    // Find the requested episode
-    const targetEpisode = episodes.find(ep => ep.number === episode) || episodes[0]
-    console.log("[v0] HiAnime episode:", targetEpisode.number, targetEpisode.episodeId)
-    
-    // Get servers
-    const servers = await getEpisodeServers(targetEpisode.episodeId)
-    console.log("[v0] HiAnime servers - sub:", servers.sub.length, "dub:", servers.dub.length)
-    
-    // Try each server (prioritize sub)
-    const serverList = [...servers.sub, ...servers.dub, ...servers.raw]
-    
-    for (const server of serverList) {
-      try {
-        console.log("[v0] HiAnime trying server:", server.serverName, server.serverId)
-        
-        const streamInfo = await getStreamingSources(
-          targetEpisode.episodeId,
-          server.serverId,
-          server.type
-        )
-        
-        if (streamInfo && streamInfo.sources.length > 0) {
-          console.log("[v0] HiAnime stream found:", streamInfo.sources.length, "sources")
-          
-          // Proxy the HLS URLs
-          const proxiedSources = streamInfo.sources.map(source => ({
-            ...source,
-            url: source.isM3U8 ? proxyUrl(source.url, streamInfo.headers) : source.url,
-          }))
-          
-          return {
-            success: true,
-            sources: proxiedSources,
-            subtitles: streamInfo.subtitles,
-            intro: streamInfo.intro,
-            outro: streamInfo.outro,
-            provider: `HiAnime (${server.serverName})`,
-          }
-        }
-      } catch (err) {
-        console.log("[v0] HiAnime server error:", server.serverName, err)
-        continue
-      }
-    }
-    
-    return null
-  } catch (error) {
-    console.error("[v0] HiAnime error:", error)
-    return null
-  }
-}
-
 // Try Megaplay iframe as fallback
 async function tryMegaplay(title: string, episode: number): Promise<StreamResponse | null> {
   try {
     console.log("[v0] Megaplay fallback for:", title)
     
-    // Get MAL ID from Jikan
     const jikanResult = await searchJikan(title)
     
     if (!jikanResult) {
@@ -201,7 +262,6 @@ async function tryMegaplay(title: string, episode: number): Promise<StreamRespon
     
     console.log("[v0] Megaplay MAL ID:", jikanResult.mal_id)
     
-    // Generate Megaplay URLs
     const subUrl = `${MEGAPLAY_BASE}/stream/mal/${jikanResult.mal_id}/${episode}/sub`
     const dubUrl = `${MEGAPLAY_BASE}/stream/mal/${jikanResult.mal_id}/${episode}/dub`
     
@@ -238,11 +298,11 @@ export async function GET(request: Request): Promise<NextResponse<StreamResponse
 
   console.log("[v0] Stream request:", title, "ep:", episode, "preferHls:", preferHls)
 
-  // Try HiAnime first for HLS streams
+  // Try AniWatch API first for HLS streams
   if (preferHls) {
-    const hiAnimeResult = await tryHiAnime(title, episode)
-    if (hiAnimeResult) {
-      return NextResponse.json(hiAnimeResult)
+    const aniWatchResult = await tryAniWatch(title, episode)
+    if (aniWatchResult) {
+      return NextResponse.json(aniWatchResult)
     }
   }
 

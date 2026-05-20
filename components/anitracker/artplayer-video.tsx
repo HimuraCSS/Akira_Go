@@ -308,7 +308,7 @@ export function VideoPlayer() {
         hlsInstance.current = null
       }
     }
-  }, [streamUrl, initPlayer, currentSource?.isM3U8, currentSource?.type])
+  }, [streamUrl, initPlayer, currentSource])
 
   // Update subtitle
   useEffect(() => {
