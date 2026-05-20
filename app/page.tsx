@@ -102,10 +102,8 @@ function AkiraGoContent() {
 
       {/* Main Content */}
       <main className="pt-16">
-        {/* Hero Section - Dynamic with real API data */}
+        {/* Hero Section - Auto-rotating carousel with seasonal anime */}
         <HeroSection 
-          anime={featured ?? undefined}
-          isLoading={isLoading && !featured}
           onOpenAddons={() => setAddonsModalOpen(true)} 
           onWatchNow={scrollToPlayer}
         />
