@@ -498,25 +498,20 @@ export function StreamingProvider({ children }: { children: ReactNode }) {
         episode.animeTitle
       )
       
-      console.log("[v0] streamInfo received:", streamInfo?.sources?.length, "sources, isIframe:", streamInfo?.isIframe)
-      
       if (!streamInfo || !streamInfo.sources || streamInfo.sources.length === 0) {
         throw new Error("Nenhuma fonte de streaming disponível")
       }
 
       // Convert to our StreamSource format
-      const sources: StreamSource[] = streamInfo.sources.map((source, index) => {
-        console.log("[v0] source:", index, source.type, source.url?.substring(0, 60))
-        return {
-          id: `source-${index}-${source.quality}`,
-          name: `${state.activeProvider} ${source.quality}`,
-          quality: source.quality,
-          url: source.url,
-          isM3U8: source.isM3U8,
-          status: "active" as const,
-          type: (source.type || (streamInfo.isIframe ? "iframe" : (source.isM3U8 ? "hls" : "mp4"))) as StreamSource["type"],
-        }
-      })
+      const sources: StreamSource[] = streamInfo.sources.map((source, index) => ({
+        id: `source-${index}-${source.quality}`,
+        name: `${state.activeProvider} ${source.quality}`,
+        quality: source.quality,
+        url: source.url,
+        isM3U8: source.isM3U8,
+        status: "active" as const,
+        type: (source.type || (streamInfo.isIframe ? "iframe" : (source.isM3U8 ? "hls" : "mp4"))) as StreamSource["type"],
+      }))
 
       // Get best quality source
       const bestSource = getBestSource(streamInfo.sources)

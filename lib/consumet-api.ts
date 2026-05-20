@@ -223,10 +223,8 @@ export async function getStreamingSources(
       }
     }
     
-    console.log("[v0] No sources found for:", animeTitle || episodeId)
     return null
-  } catch (error) {
-    console.error("[v0] Stream fetch failed:", error)
+  } catch {
     return null
   }
 }

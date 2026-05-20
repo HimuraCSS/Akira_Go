@@ -79,7 +79,6 @@ export function VideoPlayer() {
 
   // Check if current source is demo or iframe
   useEffect(() => {
-    console.log("[v0] currentSource changed:", currentSource?.type, currentSource?.url?.substring(0, 60))
     if (currentSource) {
       const isDemoSource = currentSource.url?.includes("test-streams.mux.dev") || 
                           currentSource.url?.includes("bitdash-a.akamaihd.net") ||
@@ -89,8 +88,6 @@ export function VideoPlayer() {
                        currentSource.url?.includes("/embed/") ||
                        currentSource.url?.includes("/stream/mal/")
       
-      console.log("[v0] isDemoSource:", isDemoSource, "isIframe:", isIframe)
-      
       setIsDemo(isDemoSource)
       setIsIframeSource(isIframe && !isDemoSource)
       
@@ -99,8 +96,6 @@ export function VideoPlayer() {
       } else {
         setDemoMessage(null)
       }
-    } else {
-      console.log("[v0] currentSource is null/undefined")
     }
   }, [currentSource])
 
