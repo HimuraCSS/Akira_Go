@@ -1,11 +1,12 @@
 "use client"
 
-import { useState, lazy, Suspense, useRef } from "react"
+import { useState, lazy, Suspense, useRef, useEffect, useCallback } from "react"
 import Image from "next/image"
 import { Header } from "@/components/anitracker/header"
 import { HeroSection } from "@/components/anitracker/hero-section"
 import { StreamingProvider, useStreaming } from "@/components/anitracker/streaming-context"
 import { MALAuthProvider } from "@/components/anitracker/mal-auth-context"
+import { useAuth } from "@/contexts/auth-context"
 import type { AnimeData } from "@/components/anitracker/anime-card"
 import { useDashboardData, usePopularAnime } from "@/hooks/use-anime"
 
@@ -45,42 +46,6 @@ function SectionSkeleton() {
     </div>
   )
 }
-
-// Continue watching mock data (this would come from user's watch history in a real app)
-const continueWatchingList = [
-  { 
-    id: "cw-1", 
-    title: "Solo Leveling", 
-    episode: 8, 
-    progress: 65, 
-    image: "https://cdn.myanimelist.net/images/anime/1908/141597.jpg",
-    nextEpisodeTitle: "A Arte do Monarca das Sombras"
-  },
-  { 
-    id: "cw-2", 
-    title: "Frieren", 
-    episode: 15, 
-    progress: 30, 
-    image: "https://cdn.myanimelist.net/images/anime/1015/138006.jpg",
-    nextEpisodeTitle: "Memórias de Himmel"
-  },
-  { 
-    id: "cw-3", 
-    title: "Jujutsu Kaisen S2", 
-    episode: 18, 
-    progress: 80, 
-    image: "https://cdn.myanimelist.net/images/anime/1792/138022.jpg",
-    nextEpisodeTitle: "Incidente de Shibuya - Parte 35"
-  },
-  { 
-    id: "cw-4", 
-    title: "Kaiju No. 8", 
-    episode: 5, 
-    progress: 45, 
-    image: "https://cdn.myanimelist.net/images/anime/1032/142086.jpg",
-    nextEpisodeTitle: "O Despertar de Kafka"
-  },
-]
 
 function AkiraGoContent() {
   const [addonsModalOpen, setAddonsModalOpen] = useState(false)
@@ -284,6 +249,87 @@ function AkiraGoContent() {
 }
 
 function ContinueWatchingSection() {
+  const { getContinueWatching, user, isGuest, saveWatchProgress } = useAuth()
+  const { loadAnimeEpisodes, playEpisode } = useStreaming()
+  const [continueWatchingList, setContinueWatchingList] = useState<ContinueWatchingAnime[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+
+  const loadContinueWatching = useCallback(async () => {
+    setIsLoading(true)
+    try {
+      const history = await getContinueWatching()
+      const formatted: ContinueWatchingAnime[] = history.map(entry => ({
+        id: entry.id,
+        animeId: entry.anime_id,
+        title: entry.anime_title,
+        episode: entry.episode_number,
+        progress: entry.duration_seconds > 0 
+          ? Math.round((entry.progress_seconds / entry.duration_seconds) * 100) 
+          : 0,
+        image: entry.poster_url || "/placeholder.jpg",
+        progressSeconds: entry.progress_seconds,
+        durationSeconds: entry.duration_seconds,
+      }))
+      setContinueWatchingList(formatted)
+    } catch (error) {
+      console.error("Failed to load continue watching:", error)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [getContinueWatching])
+
+  useEffect(() => {
+    if (user || isGuest) {
+      loadContinueWatching()
+    } else {
+      setIsLoading(false)
+    }
+  }, [user, isGuest, loadContinueWatching])
+
+  const handleResume = async (anime: ContinueWatchingAnime) => {
+    // Load anime episodes and resume playback
+    await loadAnimeEpisodes(anime.animeId, anime.title, anime.image)
+    
+    const episode = {
+      id: `${anime.animeId}-ep-${anime.episode}`,
+      number: anime.episode,
+      title: `Episodio ${anime.episode}`,
+      thumbnail: anime.image,
+      duration: "24:00",
+      animeId: anime.animeId,
+      animeTitle: anime.title,
+    }
+    
+    await playEpisode(episode)
+  }
+
+  // Don't show section if not logged in/guest and no data
+  if (!user && !isGuest) {
+    return null
+  }
+
+  if (isLoading) {
+    return (
+      <section className="py-8">
+        <div className="container mx-auto px-6 lg:px-8">
+          <div className="mb-6">
+            <div className="h-8 bg-secondary/50 rounded w-48 animate-pulse" />
+            <div className="h-4 bg-secondary/50 rounded w-32 mt-2 animate-pulse" />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="aspect-video bg-secondary/50 rounded-lg animate-pulse" />
+            ))}
+          </div>
+        </div>
+      </section>
+    )
+  }
+
+  if (continueWatchingList.length === 0) {
+    return null
+  }
+
   return (
     <section className="py-8">
       <div className="container mx-auto px-6 lg:px-8">
@@ -294,7 +340,11 @@ function ContinueWatchingSection() {
         
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {continueWatchingList.map((anime) => (
-            <ContinueWatchingCard key={anime.id} anime={anime} />
+            <ContinueWatchingCard 
+              key={anime.id} 
+              anime={anime} 
+              onResume={() => handleResume(anime)}
+            />
           ))}
         </div>
       </div>
@@ -304,16 +354,27 @@ function ContinueWatchingSection() {
 
 interface ContinueWatchingAnime {
   id: string
+  animeId: string
   title: string
   episode: number
   progress: number
   image: string
-  nextEpisodeTitle: string
+  progressSeconds: number
+  durationSeconds: number
 }
 
-function ContinueWatchingCard({ anime }: { anime: ContinueWatchingAnime }) {
+function ContinueWatchingCard({ anime, onResume }: { anime: ContinueWatchingAnime; onResume: () => void }) {
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return `${mins}:${secs.toString().padStart(2, "0")}`
+  }
+
   return (
-    <div className="group relative glass-card rounded-lg overflow-hidden border border-border hover:border-primary/50 transition-all cursor-pointer">
+    <button
+      onClick={onResume}
+      className="group relative glass-card rounded-lg overflow-hidden border border-border hover:border-primary/50 transition-all cursor-pointer text-left w-full"
+    >
       <div className="aspect-video relative">
         <Image
           src={anime.image}
@@ -336,8 +397,9 @@ function ContinueWatchingCard({ anime }: { anime: ContinueWatchingAnime }) {
       
       <div className="p-3">
         <h3 className="text-sm font-medium text-foreground truncate">{anime.title}</h3>
-        <p className="text-xs text-muted-foreground">EP {anime.episode} • {anime.progress}% assistido</p>
-        <p className="text-xs text-muted-foreground/70 truncate mt-1">{anime.nextEpisodeTitle}</p>
+        <p className="text-xs text-muted-foreground">
+          EP {anime.episode} • {formatTime(anime.progressSeconds)} / {formatTime(anime.durationSeconds)}
+        </p>
       </div>
 
       {/* Play overlay on hover */}
@@ -348,7 +410,7 @@ function ContinueWatchingCard({ anime }: { anime: ContinueWatchingAnime }) {
           </svg>
         </div>
       </div>
-    </div>
+    </button>
   )
 }
 

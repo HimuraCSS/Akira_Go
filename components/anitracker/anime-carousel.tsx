@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef, useMemo } from "react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { AnimeCard, AnimeCardSkeleton, type AnimeData } from "./anime-card"
@@ -12,99 +12,55 @@ interface AnimeCarouselProps {
   isLoading?: boolean
   onPlayAnime?: (anime: AnimeData) => void
   onAnimeInfo?: (anime: AnimeData) => void
-  sectionId?: string // Unique section identifier to prevent duplicate keys across sections
+  sectionId?: string
 }
-
-// Default data for when no props are provided
-const defaultAnimes: AnimeData[] = [
-  {
-    id: "1",
-    title: "Solo Leveling",
-    japaneseTitle: "俺だけレベルアップな件",
-    image: "https://images.unsplash.com/photo-1612036782180-6f0b6cd846fe?w=400&q=80",
-    score: 8.9,
-    episodes: 12,
-    status: "Airing",
-    synopsis: "Após ser despertado com poderes únicos, o caçador mais fraco de todos se torna o mais forte...",
-    genres: ["Ação", "Fantasia"],
-    year: 2024,
-  },
-  {
-    id: "2",
-    title: "Demon Slayer",
-    japaneseTitle: "鬼滅の刃",
-    image: "https://images.unsplash.com/photo-1578632767115-351597cf2477?w=400&q=80",
-    score: 9.2,
-    episodes: 26,
-    status: "Completed",
-    synopsis: "Tanjiro busca vingança contra os demônios que destruíram sua família...",
-    genres: ["Ação", "Sobrenatural"],
-    year: 2019,
-  },
-  {
-    id: "3",
-    title: "Jujutsu Kaisen",
-    japaneseTitle: "呪術廻戦",
-    image: "https://images.unsplash.com/photo-1614583225154-5fcdda07019e?w=400&q=80",
-    score: 8.7,
-    episodes: 24,
-    status: "Completed",
-    synopsis: "Yuji Itadori se junta à luta contra maldições sobrenaturais...",
-    genres: ["Ação", "Horror"],
-    year: 2020,
-  },
-  {
-    id: "4",
-    title: "Attack on Titan",
-    japaneseTitle: "進撃の巨人",
-    image: "https://images.unsplash.com/photo-1601850494422-3cf14624b0b3?w=400&q=80",
-    score: 9.5,
-    episodes: 87,
-    status: "Completed",
-    synopsis: "A humanidade luta pela sobrevivência contra gigantes devoradores...",
-    genres: ["Ação", "Drama"],
-    year: 2013,
-  },
-  {
-    id: "5",
-    title: "My Hero Academia",
-    japaneseTitle: "僕のヒーローアカデミア",
-    image: "https://images.unsplash.com/photo-1560169897-fc0cdbdfa4d5?w=400&q=80",
-    score: 8.4,
-    episodes: 138,
-    status: "Airing",
-    synopsis: "Em um mundo de super-heróis, um garoto sem poderes sonha em se tornar o maior...",
-    genres: ["Ação", "Escolar"],
-    year: 2016,
-  },
-  {
-    id: "6",
-    title: "Chainsaw Man",
-    japaneseTitle: "チェンソーマン",
-    image: "https://images.unsplash.com/photo-1618336753974-aae8e04506aa?w=400&q=80",
-    score: 8.8,
-    episodes: 12,
-    status: "Completed",
-    synopsis: "Denji se funde com seu demônio motosserra para caçar demônios...",
-    genres: ["Ação", "Horror"],
-    year: 2022,
-  },
-]
 
 export function AnimeCarousel({ 
   title = "Em Alta",
   subtitle = "Os animes mais populares da temporada",
-  animes,
+  animes = [],
   isLoading = false,
   onPlayAnime,
   onAnimeInfo,
   sectionId = "default",
 }: AnimeCarouselProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null)
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const [canScrollLeft, setCanScrollLeft] = useState(false)
+  const [canScrollRight, setCanScrollRight] = useState(true)
   
-  // Use provided animes or fallback to defaults
-  const displayAnimes = animes ?? defaultAnimes
+  // Deduplicate animes by ID
+  const displayAnimes = useMemo(() => {
+    const seen = new Set<string>()
+    return animes.filter(anime => {
+      if (seen.has(anime.id)) return false
+      seen.add(anime.id)
+      return true
+    })
+  }, [animes])
+
   const isEmpty = !isLoading && displayAnimes.length === 0
+
+  const updateScrollButtons = () => {
+    if (!scrollContainerRef.current) return
+    const { scrollLeft, scrollWidth, clientWidth } = scrollContainerRef.current
+    setCanScrollLeft(scrollLeft > 0)
+    setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 10)
+  }
+
+  const scrollLeft = () => {
+    if (!scrollContainerRef.current) return
+    const cardWidth = 200 // approximate card width + gap
+    scrollContainerRef.current.scrollBy({ left: -cardWidth * 3, behavior: "smooth" })
+    setTimeout(updateScrollButtons, 300)
+  }
+
+  const scrollRight = () => {
+    if (!scrollContainerRef.current) return
+    const cardWidth = 200
+    scrollContainerRef.current.scrollBy({ left: cardWidth * 3, behavior: "smooth" })
+    setTimeout(updateScrollButtons, 300)
+  }
 
   return (
     <section className="py-8">
@@ -115,14 +71,28 @@ export function AnimeCarousel({
             <h2 className="text-2xl font-bold text-foreground">{title}</h2>
             <p className="text-sm text-muted-foreground">{subtitle}</p>
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" size="icon" className="border-border hover:border-primary/50">
-              <ChevronLeft className="w-4 h-4" />
-            </Button>
-            <Button variant="outline" size="icon" className="border-border hover:border-primary/50">
-              <ChevronRight className="w-4 h-4" />
-            </Button>
-          </div>
+          {!isEmpty && !isLoading && displayAnimes.length > 6 && (
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                size="icon" 
+                className="border-border hover:border-primary/50 disabled:opacity-30"
+                onClick={scrollLeft}
+                disabled={!canScrollLeft}
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </Button>
+              <Button 
+                variant="outline" 
+                size="icon" 
+                className="border-border hover:border-primary/50 disabled:opacity-30"
+                onClick={scrollRight}
+                disabled={!canScrollRight}
+              >
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* Loading State */}
@@ -147,18 +117,27 @@ export function AnimeCarousel({
           </div>
         )}
 
-        {/* Anime Grid */}
+        {/* Anime Scrollable Row */}
         {!isLoading && !isEmpty && (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          <div 
+            ref={scrollContainerRef}
+            onScroll={updateScrollButtons}
+            className="flex gap-4 overflow-x-auto scrollbar-hide pb-2 -mx-2 px-2"
+            style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+          >
             {displayAnimes.map((anime, index) => (
-              <AnimeCard
+              <div 
                 key={`${sectionId}-${anime.id}-${index}`}
-                anime={anime}
-                isHovered={hoveredId === anime.id}
-                onHover={setHoveredId}
-                onPlay={onPlayAnime}
-                onInfo={onAnimeInfo}
-              />
+                className="flex-shrink-0 w-[calc(50%-8px)] md:w-[calc(33.333%-11px)] lg:w-[calc(16.666%-14px)]"
+              >
+                <AnimeCard
+                  anime={anime}
+                  isHovered={hoveredId === anime.id}
+                  onHover={setHoveredId}
+                  onPlay={onPlayAnime}
+                  onInfo={onAnimeInfo}
+                />
+              </div>
             ))}
           </div>
         )}

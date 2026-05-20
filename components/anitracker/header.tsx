@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useRef, useEffect } from "react"
-import { Menu, Search, Bell, User, X, Loader2, LogOut, Settings, AlertCircle } from "lucide-react"
+import { Menu, Search, Bell, User, X, Loader2, LogOut, Settings, ChevronDown } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { useAnimeSearch } from "@/hooks/use-anime"
 import { useDebounce } from "@/hooks/use-debounce"
-import { useMALAuth } from "@/components/anitracker/mal-auth-context"
+import { useAuth } from "@/contexts/auth-context"
 import { LoginModal } from "@/components/anitracker/login-modal"
 
 const NAV_ITEMS = [
@@ -37,13 +37,13 @@ export function Header() {
   
   const { 
     user, 
-    isAuthenticated, 
+    profile,
     isLoading: isAuthLoading, 
-    error: authError,
-    login, 
-    logout,
-    clearError 
-  } = useMALAuth()
+    isGuest,
+    signOut,
+  } = useAuth()
+  
+  const isAuthenticated = !!user
   
   // Debounce search to avoid too many API calls
   const debouncedQuery = useDebounce(searchQuery, 400)
@@ -60,13 +60,6 @@ export function Header() {
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
 
-  // Clear auth error when modal closes
-  useEffect(() => {
-    if (!loginModalOpen && authError) {
-      clearError()
-    }
-  }, [loginModalOpen, authError, clearError])
-
   const handleSearchFocus = () => {
     setIsSearchOpen(true)
   }
@@ -81,30 +74,12 @@ export function Header() {
     return pathname.startsWith(href)
   }
 
-  const handleLoginClick = () => {
-    if (!isAuthenticated) {
-      setLoginModalOpen(true)
-    }
-  }
+  const displayName = profile?.display_name || user?.email?.split("@")[0] || "Usuario"
+  const avatarUrl = profile?.avatar_url || user?.user_metadata?.avatar_url
 
   return (
     <>
       <header className="fixed top-0 left-0 right-0 z-50 glass-card border-b border-border">
-        {/* Auth Error Banner */}
-        {authError && (
-          <div className="bg-destructive/10 border-b border-destructive/20 px-4 py-2">
-            <div className="container mx-auto flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm text-destructive">
-                <AlertCircle className="w-4 h-4" />
-                <span>{authError}</span>
-              </div>
-              <button onClick={clearError} className="text-destructive hover:text-destructive/80">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        )}
-        
         <div className="container mx-auto px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             {/* Logo */}
@@ -243,27 +218,27 @@ export function Header() {
               {/* User Menu */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button 
-                    className="w-8 h-8 rounded-full overflow-hidden border border-primary/30 focus:outline-none focus:ring-2 focus:ring-primary transition-all hover:border-primary"
-                    onClick={!isAuthenticated ? handleLoginClick : undefined}
-                  >
-                    {isAuthLoading ? (
-                      <div className="w-full h-full bg-primary/20 flex items-center justify-center">
-                        <Loader2 className="w-4 h-4 animate-spin text-primary" />
-                      </div>
-                    ) : isAuthenticated && user?.picture ? (
-                      <Image
-                        src={user.picture}
-                        alt={user.name}
-                        width={32}
-                        height={32}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full bg-primary/20 flex items-center justify-center">
-                        <User className="w-4 h-4 text-primary" />
-                      </div>
-                    )}
+                  <button className="flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-secondary/50 transition-colors focus:outline-none focus:ring-2 focus:ring-primary">
+                    <div className="w-8 h-8 rounded-full overflow-hidden border border-primary/30">
+                      {isAuthLoading ? (
+                        <div className="w-full h-full bg-primary/20 flex items-center justify-center">
+                          <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                        </div>
+                      ) : avatarUrl ? (
+                        <Image
+                          src={avatarUrl}
+                          alt={displayName}
+                          width={32}
+                          height={32}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-primary/20 flex items-center justify-center">
+                          <User className="w-4 h-4 text-primary" />
+                        </div>
+                      )}
+                    </div>
+                    <ChevronDown className="w-4 h-4 text-muted-foreground hidden sm:block" />
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
@@ -271,13 +246,11 @@ export function Header() {
                     <div className="p-4 flex items-center justify-center">
                       <Loader2 className="w-5 h-5 animate-spin text-primary" />
                     </div>
-                  ) : isAuthenticated && user ? (
+                  ) : isAuthenticated ? (
                     <>
                       <div className="px-3 py-2">
-                        <p className="text-sm font-medium text-foreground">{user.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {user.anime_statistics?.num_items_completed || 0} animes completos
-                        </p>
+                        <p className="text-sm font-medium text-foreground">{displayName}</p>
+                        <p className="text-xs text-muted-foreground truncate">{user.email}</p>
                       </div>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem asChild>
@@ -297,7 +270,7 @@ export function Header() {
                         Configuracoes
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
-                      <DropdownMenuItem onClick={logout} className="text-red-500 focus:text-red-500">
+                      <DropdownMenuItem onClick={() => signOut()} className="text-red-500 focus:text-red-500">
                         <LogOut className="w-4 h-4 mr-2" />
                         Sair
                       </DropdownMenuItem>
@@ -305,20 +278,22 @@ export function Header() {
                   ) : (
                     <>
                       <div className="px-3 py-2">
-                        <p className="text-sm font-medium text-foreground">Bem-vindo!</p>
+                        <p className="text-sm font-medium text-foreground">
+                          {isGuest ? "Modo Visitante" : "Bem-vindo!"}
+                        </p>
                         <p className="text-xs text-muted-foreground">
-                          Conecte sua conta para sincronizar
+                          {isGuest ? "Seu progresso e salvo localmente" : "Entre para sincronizar seu progresso"}
                         </p>
                       </div>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem onClick={() => setLoginModalOpen(true)} className="cursor-pointer">
                         <User className="w-4 h-4 mr-2" />
-                        Entrar com MyAnimeList
+                        Entrar / Criar conta
                       </DropdownMenuItem>
                       <DropdownMenuItem asChild>
                         <Link href="/descobrir" className="cursor-pointer">
                           <Search className="w-4 h-4 mr-2" />
-                          Explorar sem conta
+                          Explorar
                         </Link>
                       </DropdownMenuItem>
                     </>
@@ -354,7 +329,7 @@ export function Header() {
                     }}
                     className="px-4 py-2 rounded-lg text-sm font-medium text-primary hover:bg-primary/10 transition-colors text-left"
                   >
-                    Entrar com MyAnimeList
+                    Entrar / Criar conta
                   </button>
                 )}
               </div>

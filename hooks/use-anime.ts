@@ -168,6 +168,18 @@ export function useFeaturedAnime() {
 }
 
 /**
+ * Deduplicate animes by ID
+ */
+function deduplicateAnimes(animes: AnimeData[]): AnimeData[] {
+  const seen = new Set<string>()
+  return animes.filter(anime => {
+    if (seen.has(anime.id)) return false
+    seen.add(anime.id)
+    return true
+  })
+}
+
+/**
  * Combined hook for dashboard data - fetches all sections in parallel
  */
 export function useDashboardData() {
@@ -181,10 +193,10 @@ export function useDashboardData() {
 
   return {
     featured: topAnime.animes[0] || null,
-    trending: topAnime.animes,
-    airing: airingAnime.animes,
-    popular: popularAnime.animes,
-    upcoming: upcomingAnime.animes,
+    trending: deduplicateAnimes(topAnime.animes),
+    airing: deduplicateAnimes(airingAnime.animes),
+    popular: deduplicateAnimes(popularAnime.animes),
+    upcoming: deduplicateAnimes(upcomingAnime.animes),
     isLoading,
     isError,
     refresh: () => {

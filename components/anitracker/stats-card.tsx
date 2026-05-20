@@ -14,55 +14,49 @@ export function StatsCard() {
 
   return (
     <Card className="glass-card glass-card-hover border-border">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-lg font-semibold flex items-center gap-2">
-          <TrendingUp className="w-5 h-5 text-primary" />
-          Estatísticas de Visualização
+      <CardHeader className="pb-2 pt-4 px-4">
+        <CardTitle className="text-sm font-semibold flex items-center gap-2">
+          <TrendingUp className="w-4 h-4 text-primary" />
+          Estatisticas
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Hours Watched */}
+      <CardContent className="px-4 pb-4 pt-0 space-y-3">
+        {/* Hours Watched - Compact */}
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-primary/10 border border-primary/20">
-              <Clock className="w-4 h-4 text-primary" />
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Horas Assistidas</p>
-              <p className="text-2xl font-bold text-foreground">{stats.hoursWatched}h</p>
-            </div>
+          <div className="flex items-center gap-2">
+            <Clock className="w-4 h-4 text-primary" />
+            <span className="text-xs text-muted-foreground">Horas Assistidas</span>
           </div>
-          <div className="text-right">
-            <p className="text-xs text-green-500">+12h</p>
-            <p className="text-xs text-muted-foreground">esta semana</p>
+          <div className="flex items-center gap-2">
+            <span className="text-lg font-bold text-foreground">{stats.hoursWatched}h</span>
+            <span className="text-xs text-green-500">+12h</span>
           </div>
         </div>
 
-        {/* Episodes Progress */}
-        <div className="space-y-2">
-          <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Episódios Pendentes</span>
-            <span className="text-foreground font-medium">{stats.episodesLeft}</span>
+        {/* Episodes Progress - Compact */}
+        <div className="space-y-1">
+          <div className="flex justify-between text-xs">
+            <span className="text-muted-foreground">Pendentes: {stats.episodesLeft}</span>
+            <span className="text-foreground">75%</span>
           </div>
-          <Progress value={75} className="h-2 bg-secondary" />
-          <p className="text-xs text-muted-foreground">75% da sua watchlist concluída</p>
+          <Progress value={75} className="h-1.5 bg-secondary" />
         </div>
 
-        {/* Quick Stats Grid */}
-        <div className="grid grid-cols-2 gap-3 pt-2">
-          <div className="p-3 rounded-lg bg-secondary/50 border border-border">
-            <div className="flex items-center gap-2 mb-1">
+        {/* Quick Stats - Compact Grid */}
+        <div className="grid grid-cols-2 gap-2">
+          <div className="p-2 rounded-md bg-secondary/50 border border-border">
+            <div className="flex items-center justify-between">
               <Play className="w-3 h-3 text-primary" />
-              <span className="text-xs text-muted-foreground">Sequência</span>
+              <span className="text-sm font-bold text-foreground">{stats.currentStreak}d</span>
             </div>
-            <p className="text-xl font-bold text-foreground">{stats.currentStreak} dias</p>
+            <span className="text-xs text-muted-foreground">Sequencia</span>
           </div>
-          <div className="p-3 rounded-lg bg-secondary/50 border border-border">
-            <div className="flex items-center gap-2 mb-1">
+          <div className="p-2 rounded-md bg-secondary/50 border border-border">
+            <div className="flex items-center justify-between">
               <CheckCircle className="w-3 h-3 text-green-500" />
-              <span className="text-xs text-muted-foreground">Concluídos</span>
+              <span className="text-sm font-bold text-foreground">{stats.completedThisMonth}</span>
             </div>
-            <p className="text-xl font-bold text-foreground">{stats.completedThisMonth}</p>
+            <span className="text-xs text-muted-foreground">Completos</span>
           </div>
         </div>
       </CardContent>

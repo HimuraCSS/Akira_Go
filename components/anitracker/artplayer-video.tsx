@@ -343,26 +343,26 @@ export function VideoPlayer() {
     }
   }
 
+  // Don't render anything if no anime is selected
+  if (!currentAnime && !isLoadingStream) {
+    return null
+  }
+
   return (
-    <div className="w-full space-y-4">
-      {/* Player Status Bar */}
-      <div className="flex items-center justify-between px-2">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <div className={cn(
-              "w-2 h-2 rounded-full",
-              isLoadingStream ? "bg-yellow-500 animate-pulse" :
-              streamUrl ? "bg-green-500" : "bg-muted"
-            )} />
-            <span className="text-sm text-muted-foreground">
-              {activeProviderData?.name || "Nenhum"} • {currentSource?.quality || "Auto"}
-            </span>
-          </div>
-          <Badge variant="outline" className="text-xs border-border">
-            {isLoadingStream ? "Carregando..." : 
-             isBuffering ? "Buffering..." : 
-             streamUrl ? "Pronto" : "Aguardando"}
-          </Badge>
+    <section className="py-6">
+      <div className="container mx-auto px-6 lg:px-8">
+        <div className="max-w-4xl mx-auto space-y-3">
+      {/* Player Status Bar - Compact */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className={cn(
+            "w-2 h-2 rounded-full",
+            isLoadingStream ? "bg-yellow-500 animate-pulse" :
+            streamUrl ? "bg-green-500" : "bg-muted"
+          )} />
+          <span className="text-xs text-muted-foreground">
+            {activeProviderData?.name || "Nenhum"} • {currentSource?.quality || "Auto"}
+          </span>
         </div>
         
         <div className="flex items-center gap-2">
@@ -674,6 +674,8 @@ export function VideoPlayer() {
           </div>
         </div>
       )}
-    </div>
+        </div>
+      </div>
+    </section>
   )
 }

@@ -1,8 +1,11 @@
 "use client"
 
-import { Link2, CheckCircle, XCircle, ExternalLink } from "lucide-react"
+import { Link2, CheckCircle, XCircle, ChevronDown } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { useState } from "react"
+import { cn } from "@/lib/utils"
 
 interface TrackingService {
   id: string
@@ -39,74 +42,86 @@ const services: TrackingService[] = [
 ]
 
 export function TrackingCard() {
+  const [isExpanded, setIsExpanded] = useState(false)
+  const connectedCount = services.filter(s => s.connected).length
+
   return (
     <Card className="glass-card glass-card-hover border-border">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-lg font-semibold flex items-center gap-2">
-          <Link2 className="w-5 h-5 text-primary" />
-          Serviços de Tracking
+      <CardHeader className="pb-2 pt-4 px-4">
+        <CardTitle className="text-sm font-semibold flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Link2 className="w-4 h-4 text-primary" />
+            Tracking
+          </div>
+          <Badge variant="outline" className="text-xs">
+            {connectedCount}/{services.length} conectados
+          </Badge>
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-3">
-        {services.map((service) => (
-          <div
-            key={service.id}
-            className={`flex items-center justify-between p-3 rounded-lg border transition-colors ${
-              service.connected 
-                ? "bg-secondary/30 border-green-500/20 hover:border-green-500/40" 
-                : "bg-secondary/20 border-border hover:border-primary/30"
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-xs font-bold ${
-                service.connected 
-                  ? "bg-primary/20 text-primary border border-primary/30" 
-                  : "bg-secondary text-muted-foreground border border-border"
-              }`}>
-                {service.icon}
+      <CardContent className="px-4 pb-4 pt-0">
+        {/* Summary */}
+        <button
+          onClick={() => setIsExpanded(!isExpanded)}
+          className="w-full flex items-center justify-between p-2 rounded-lg bg-secondary/30 border border-border mb-2"
+        >
+          <div className="flex items-center gap-2">
+            {services.filter(s => s.connected).slice(0, 2).map(s => (
+              <div key={s.id} className="w-6 h-6 rounded bg-primary/20 text-primary text-xs font-bold flex items-center justify-center">
+                {s.icon}
               </div>
-              <div>
+            ))}
+            <span className="text-xs text-muted-foreground">
+              {connectedCount > 0 ? `${connectedCount} servicos conectados` : "Nenhum conectado"}
+            </span>
+          </div>
+          <ChevronDown className={cn("w-4 h-4 text-muted-foreground transition-transform", isExpanded && "rotate-180")} />
+        </button>
+
+        {/* Expandable List */}
+        {isExpanded && (
+          <div className="space-y-1.5 max-h-40 overflow-y-auto">
+            {services.map((service) => (
+              <div
+                key={service.id}
+                className={cn(
+                  "flex items-center justify-between p-2 rounded-md border transition-colors",
+                  service.connected 
+                    ? "bg-secondary/30 border-green-500/20" 
+                    : "bg-secondary/20 border-border"
+                )}
+              >
                 <div className="flex items-center gap-2">
-                  <p className="text-sm font-medium text-foreground">{service.name}</p>
-                  {service.connected ? (
-                    <CheckCircle className="w-3.5 h-3.5 text-green-500" />
-                  ) : (
-                    <XCircle className="w-3.5 h-3.5 text-muted-foreground" />
-                  )}
+                  <div className={cn(
+                    "w-6 h-6 rounded flex items-center justify-center text-xs font-bold",
+                    service.connected 
+                      ? "bg-primary/20 text-primary" 
+                      : "bg-secondary text-muted-foreground"
+                  )}>
+                    {service.icon}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs font-medium text-foreground">{service.name}</span>
+                      {service.connected ? (
+                        <CheckCircle className="w-3 h-3 text-green-500" />
+                      ) : (
+                        <XCircle className="w-3 h-3 text-muted-foreground" />
+                      )}
+                    </div>
+                    {service.connected && (
+                      <span className="text-xs text-muted-foreground">{service.syncedItems} itens</span>
+                    )}
+                  </div>
                 </div>
-                {service.connected ? (
-                  <p className="text-xs text-muted-foreground">
-                    {service.username} • {service.syncedItems} itens sincronizados
-                  </p>
-                ) : (
-                  <p className="text-xs text-muted-foreground">Não conectado</p>
+                {!service.connected && (
+                  <Button variant="ghost" size="sm" className="h-6 text-xs px-2">
+                    Conectar
+                  </Button>
                 )}
               </div>
-            </div>
-            <Button 
-              variant={service.connected ? "ghost" : "outline"} 
-              size="sm"
-              className={service.connected 
-                ? "text-muted-foreground hover:text-foreground" 
-                : "border-primary/30 text-primary hover:bg-primary/10"
-              }
-            >
-              {service.connected ? (
-                <ExternalLink className="w-4 h-4" />
-              ) : (
-                "Conectar"
-              )}
-            </Button>
+            ))}
           </div>
-        ))}
-
-        {/* Auto-sync status */}
-        <div className="pt-2 border-t border-border">
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-muted-foreground">Auto-sync ativado</span>
-            <span className="text-green-500">Última sync: 5 min atrás</span>
-          </div>
-        </div>
+        )}
       </CardContent>
     </Card>
   )
