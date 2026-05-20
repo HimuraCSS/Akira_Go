@@ -180,31 +180,30 @@ export async function getStreamingSources(
   animeTitle?: string
 ): Promise<ConsumetStreamInfo | null> {
   try {
-    // Always use the addon API which has better error handling
+    // Always use the addon API which handles Megaplay iframe
     if (animeTitle) {
       const episodeNumber = episodeId.match(/episode-(\d+)$/)?.[1] || "1"
       
       const addonResponse = await fetch(
-        `/api/addon/stream?title=${encodeURIComponent(animeTitle)}&episode=${episodeNumber}&provider=${provider}`
+        `/api/addon/stream?title=${encodeURIComponent(animeTitle)}&episode=${episodeNumber}`
       )
       
       if (addonResponse.ok) {
         const addonData = await addonResponse.json()
         
-        // Check if we have sources (either from HLS or iframe)
+        // Check if we have sources
         if (addonData.success && addonData.sources && addonData.sources.length > 0) {
           return {
             sources: addonData.sources.map((s: { url: string; quality?: string; isM3U8?: boolean; type?: string }) => ({
-              ...s,
-              type: s.type || (addonData.isIframe ? "iframe" : (s.isM3U8 ? "hls" : "mp4")),
+              url: s.url,
+              quality: s.quality || "Auto",
+              isM3U8: s.isM3U8 || false,
+              type: s.type || "iframe",
             })),
-            subtitles: addonData.subtitles,
-            isIframe: addonData.isIframe,
-            isDemo: addonData.isDemo,
-            intro: addonData.intro,
-            outro: addonData.outro,
-            headers: addonData.headers,
-            provider: addonData.provider,
+            subtitles: addonData.subtitles || [],
+            isIframe: addonData.isIframe || true,
+            isDemo: false,
+            provider: addonData.provider || "Megaplay",
           }
         }
       }
