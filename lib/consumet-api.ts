@@ -175,16 +175,20 @@ export async function getStreamingSources(
   animeTitle?: string
 ): Promise<ConsumetStreamInfo | null> {
   try {
-    // Try the new addon API first if we have the anime title
+    // Always use the addon API which has better error handling
     if (animeTitle) {
       const episodeNumber = episodeId.match(/episode-(\d+)$/)?.[1] || "1"
+      console.log("[v0] Fetching stream for:", animeTitle, "episode:", episodeNumber)
+      
       const addonResponse = await fetch(
         `/api/addon/stream?title=${encodeURIComponent(animeTitle)}&episode=${episodeNumber}&provider=${provider}`
       )
       
       if (addonResponse.ok) {
         const addonData = await addonResponse.json()
-        if (addonData.sources && addonData.sources.length > 0) {
+        console.log("[v0] Addon response:", addonData.success ? "success" : addonData.error)
+        
+        if (addonData.success && addonData.sources && addonData.sources.length > 0) {
           return {
             sources: addonData.sources,
             subtitles: addonData.subtitles,
@@ -193,25 +197,24 @@ export async function getStreamingSources(
       }
     }
     
-    // Try direct episode ID API
-    const response = await fetch(
-      `/api/anime/watch/${encodeURIComponent(episodeId)}?provider=${provider}&server=${server}`
-    )
-    
-    if (!response.ok) {
-      throw new Error("Watch API error")
+    // Fallback: try direct episode ID if it's not a demo ID
+    if (!episodeId.startsWith("demo-")) {
+      const response = await fetch(
+        `/api/anime/watch/${encodeURIComponent(episodeId)}?provider=${provider}&server=${server}`
+      )
+      
+      if (response.ok) {
+        const data = await response.json()
+        if (data.sources && data.sources.length > 0) {
+          return data
+        }
+      }
     }
     
-    const data = await response.json()
-    
-    if (data.error || !data.sources || data.sources.length === 0) {
-      throw new Error("No sources available")
-    }
-    
-    return data
+    console.log("[v0] No sources found for:", animeTitle || episodeId)
+    return null
   } catch (error) {
     console.error("[v0] Stream fetch failed:", error)
-    // Return null instead of demo streams - let the UI handle the error
     return null
   }
 }

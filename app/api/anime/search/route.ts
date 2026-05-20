@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 
-// Consumet API proxy to avoid CORS issues
-const CONSUMET_BASE_URL = "https://api.consumet.org"
+// Use the working Consumet mirror
+const CONSUMET_BASE_URL = "https://consumet-api.vercel.app"
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
@@ -13,24 +13,25 @@ export async function GET(request: Request) {
   }
 
   try {
-    const response = await fetch(
-      `${CONSUMET_BASE_URL}/anime/${provider}/${encodeURIComponent(query)}`,
-      {
-        headers: {
-          "Accept": "application/json",
-        },
-        next: { revalidate: 60 }, // Cache for 60 seconds
-      }
-    )
+    const url = `${CONSUMET_BASE_URL}/anime/${provider}/${encodeURIComponent(query)}`
+    console.log("[API] Search request:", url)
+    
+    const response = await fetch(url, {
+      headers: {
+        "Accept": "application/json",
+      },
+    })
 
     if (!response.ok) {
-      throw new Error(`Consumet API error: ${response.status}`)
+      console.log("[API] Search failed with status:", response.status)
+      return NextResponse.json({ results: [], error: `API error: ${response.status}` })
     }
 
     const data = await response.json()
+    console.log("[API] Search success, results:", data.results?.length || 0)
     return NextResponse.json(data)
   } catch (error) {
     console.error("[API] Consumet search error:", error)
-    return NextResponse.json({ results: [], error: "Search failed" }, { status: 500 })
+    return NextResponse.json({ results: [], error: "Search failed" })
   }
 }

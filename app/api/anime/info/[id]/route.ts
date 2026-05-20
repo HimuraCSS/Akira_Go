@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 
-const CONSUMET_BASE_URL = "https://api.consumet.org"
+// Use the working Consumet mirror
+const CONSUMET_BASE_URL = "https://consumet-api.vercel.app"
 
 export async function GET(
   request: Request,
@@ -11,21 +12,22 @@ export async function GET(
   const provider = searchParams.get("provider") || "gogoanime"
 
   try {
-    const response = await fetch(
-      `${CONSUMET_BASE_URL}/anime/${provider}/info/${id}`,
-      {
-        headers: {
-          "Accept": "application/json",
-        },
-        next: { revalidate: 300 }, // Cache for 5 minutes
-      }
-    )
+    const url = `${CONSUMET_BASE_URL}/anime/${provider}/info/${id}`
+    console.log("[API] Info request:", url)
+    
+    const response = await fetch(url, {
+      headers: {
+        "Accept": "application/json",
+      },
+    })
 
     if (!response.ok) {
-      throw new Error(`Consumet API error: ${response.status}`)
+      console.log("[API] Info failed with status:", response.status)
+      return NextResponse.json({ error: `API error: ${response.status}` }, { status: response.status })
     }
 
     const data = await response.json()
+    console.log("[API] Info success, episodes:", data.episodes?.length || 0)
     return NextResponse.json(data)
   } catch (error) {
     console.error("[API] Consumet info error:", error)
