@@ -32,7 +32,13 @@ import { useStreaming } from "./streaming-context"
 import { cn } from "@/lib/utils"
 
 import { SubtitleSearch } from "./subtitle-search"
-import { artplayerAutoSkip, artplayerChapterHighlight } from "./artplayer-plugins"
+import { 
+  artplayerAutoSkip, 
+  artplayerChapterHighlight, 
+  artplayerUploadSubtitle,
+  saveContinueWatching,
+  getContinueWatchingEntry,
+} from "./artplayer-plugins"
 
 export function VideoPlayer() {
   const artRef = useRef<HTMLDivElement>(null)
@@ -226,6 +232,8 @@ export function VideoPlayer() {
           ...(intro || outro ? [artplayerAutoSkip({ intro, outro, autoSkipIntro: false, autoSkipOutro: false })] : []),
           // Chapter highlight on progress bar
           ...(intro || outro ? [artplayerChapterHighlight({ intro, outro })] : []),
+          // Upload subtitle plugin
+          artplayerUploadSubtitle(),
         ],
       })
       
@@ -233,6 +241,15 @@ export function VideoPlayer() {
       art.on("ready", () => {
         setIsInitializing(false)
         setIsPlaying(true)
+        
+        // Resume from continue watching position
+        if (currentAnime && currentEpisode) {
+          const entry = getContinueWatchingEntry(currentAnime.animeId.toString())
+          if (entry && entry.episodeNumber === currentEpisode.number && entry.leftAt > 10) {
+            art.currentTime = entry.leftAt
+            art.notice.show = `Continuando de ${Math.floor(entry.leftAt / 60)}:${String(Math.floor(entry.leftAt % 60)).padStart(2, "0")}`
+          }
+        }
       })
       
       art.on("play", () => setIsPlaying(true))
@@ -244,13 +261,29 @@ export function VideoPlayer() {
         setPlayerError("Erro ao carregar o vídeo")
       })
       
+      // Save continue watching on destroy
+      art.on("destroy", () => {
+        if (currentAnime && currentEpisode && art.currentTime > 30) {
+          saveContinueWatching({
+            animeId: currentAnime.animeId.toString(),
+            animeTitle: currentAnime.animeTitle,
+            episodeNumber: currentEpisode.number,
+            episodeId: currentEpisode.id,
+            poster: currentAnime.poster,
+            leftAt: art.currentTime,
+            duration: art.duration,
+            updatedAt: Date.now(),
+          })
+        }
+      })
+      
       artInstance.current = art
     } catch (err) {
       console.error("[v0] ArtPlayer init error:", err)
       setPlayerError("Falha ao inicializar o player")
       setIsInitializing(false)
     }
-  }, [activeSubtitle, availableSources, currentSource, setIsBuffering, setIsPlaying, switchSource, intro, outro])
+  }, [activeSubtitle, availableSources, currentSource, setIsBuffering, setIsPlaying, switchSource, intro, outro, currentAnime, currentEpisode])
 
   // Initialize player when stream URL changes - skip for iframe sources
   useEffect(() => {
