@@ -526,12 +526,12 @@ export function VideoPlayer() {
         {isIframeSource && streamUrl && !isLoadingStream && (
           <div className="absolute inset-0 w-full h-full bg-black">
             <iframe
+              key={streamUrl}
               src={streamUrl}
               className="absolute inset-0 w-full h-full"
               allowFullScreen
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
               style={{ border: "none" }}
-              referrerPolicy="no-referrer"
             />
           </div>
         )}
