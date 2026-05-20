@@ -193,13 +193,14 @@ export async function getStreamingSources(
       
       if (addonResponse.ok) {
         const addonData = await addonResponse.json()
-        console.log("[v0] Addon response:", addonData.success ? "success" : addonData.error, "isDemo:", addonData.isDemo, "isIframe:", addonData.isIframe, "provider:", addonData.provider)
+        console.log("[v0] Addon response:", addonData.success ? "success" : addonData.error, "isDemo:", addonData.isDemo, "isIframe:", addonData.isIframe, "provider:", addonData.provider, "sources:", addonData.sources?.length)
         
         if (addonData.success && addonData.sources && addonData.sources.length > 0) {
+          console.log("[v0] Processing sources:", addonData.sources.length, "isIframe:", addonData.isIframe, "first url:", addonData.sources[0]?.url?.substring(0, 60))
           return {
             sources: addonData.sources.map((s: { url: string; quality?: string; isM3U8?: boolean; type?: string }) => ({
               ...s,
-              type: s.type || (s.isM3U8 ? "hls" : "mp4"),
+              type: s.type || (addonData.isIframe ? "iframe" : (s.isM3U8 ? "hls" : "mp4")),
             })),
             subtitles: addonData.subtitles,
             isIframe: addonData.isIframe,
