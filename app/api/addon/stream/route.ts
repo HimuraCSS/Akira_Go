@@ -531,6 +531,7 @@ export async function GET(request: Request): Promise<NextResponse<StreamResponse
   // Try Megaplay iframe first (most reliable for recent anime)
   const megaplayResult = await tryMegaplay(title, episode)
   if (megaplayResult) {
+    console.log("[v0] Megaplay result:", JSON.stringify(megaplayResult).substring(0, 200))
     return NextResponse.json(megaplayResult)
   }
 
