@@ -1,11 +1,12 @@
 "use client"
 
-import { Plug, CheckCircle, XCircle, AlertCircle, ChevronDown, Server } from "lucide-react"
+import { Plug, CheckCircle, XCircle, AlertCircle, ChevronDown, Server, Tv } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import { useStreaming, type Provider } from "./streaming-context"
 import { ShokoSettings } from "./shoko-settings"
+import { SeanimeSettings } from "./seanime-settings"
 import type { ConsumetProvider } from "@/lib/consumet-api"
 import { useState } from "react"
 import { cn } from "@/lib/utils"
@@ -14,6 +15,7 @@ export function ProvidersCard() {
   const { providers, activeProvider, setActiveProvider, toggleProvider } = useStreaming()
   const [isExpanded, setIsExpanded] = useState(false)
   const [showShoko, setShowShoko] = useState(false)
+  const [showSeanime, setShowSeanime] = useState(false)
 
   const getStatusColor = (status: Provider["status"]) => {
     switch (status) {
@@ -97,7 +99,7 @@ export function ProvidersCard() {
             
             {/* Shoko Server Option */}
             <button
-              onClick={() => setShowShoko(!showShoko)}
+              onClick={() => { setShowShoko(!showShoko); setShowSeanime(false) }}
               className="w-full flex items-center justify-between p-2 rounded-md border bg-secondary/30 border-border hover:border-primary/30 transition-all"
             >
               <div className="flex items-center gap-2">
@@ -107,6 +109,19 @@ export function ProvidersCard() {
               </div>
               <ChevronDown className={cn("w-3 h-3 text-muted-foreground transition-transform", showShoko && "rotate-180")} />
             </button>
+            
+            {/* Seanime Option */}
+            <button
+              onClick={() => { setShowSeanime(!showSeanime); setShowShoko(false) }}
+              className="w-full flex items-center justify-between p-2 rounded-md border bg-secondary/30 border-border hover:border-primary/30 transition-all"
+            >
+              <div className="flex items-center gap-2">
+                <Tv className="w-3 h-3 text-primary" />
+                <span className="text-xs font-medium text-foreground">Seanime</span>
+                <Badge variant="outline" className="text-xs scale-90">Local</Badge>
+              </div>
+              <ChevronDown className={cn("w-3 h-3 text-muted-foreground transition-transform", showSeanime && "rotate-180")} />
+            </button>
           </div>
         )}
         
@@ -114,6 +129,13 @@ export function ProvidersCard() {
         {showShoko && (
           <div className="mt-3 pt-3 border-t border-border">
             <ShokoSettings />
+          </div>
+        )}
+        
+        {/* Seanime Settings Panel */}
+        {showSeanime && (
+          <div className="mt-3 pt-3 border-t border-border">
+            <SeanimeSettings />
           </div>
         )}
       </CardContent>
