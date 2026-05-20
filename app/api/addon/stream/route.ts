@@ -51,6 +51,47 @@ function normalizeTitle(title: string): string {
     .trim()
 }
 
+// Generate alternative title variations for better matching
+function getTitleVariations(title: string): string[] {
+  const variations: string[] = [title]
+  
+  // Common title transformations
+  const normalized = normalizeTitle(title)
+  if (normalized !== title.toLowerCase()) {
+    variations.push(normalized)
+  }
+  
+  // Remove "no" for Japanese titles (e.g., "Tongari Boushi no Atelier" -> "Tongari Boushi Atelier")
+  if (title.includes(" no ")) {
+    variations.push(title.replace(/ no /gi, " "))
+  }
+  
+  // Common romanization variations
+  const romanized = title
+    .replace(/ou/g, "o")
+    .replace(/uu/g, "u")
+  if (romanized !== title) {
+    variations.push(romanized)
+  }
+  
+  // First few words only (for long titles)
+  const words = title.split(" ")
+  if (words.length > 3) {
+    variations.push(words.slice(0, 3).join(" "))
+    variations.push(words.slice(0, 2).join(" "))
+  }
+  
+  // Remove common suffixes
+  const withoutSuffix = title
+    .replace(/\s*(Part|Cour|Season|Arc)\s*\d*/gi, "")
+    .trim()
+  if (withoutSuffix !== title && withoutSuffix.length > 3) {
+    variations.push(withoutSuffix)
+  }
+  
+  return Array.from(new Set(variations))
+}
+
 // Proxy M3U8 URL to avoid CORS
 function proxyUrl(url: string, headers?: Record<string, string>): string {
   const baseProxy = `${M3U8_PROXY}?url=${encodeURIComponent(url)}`
@@ -256,25 +297,27 @@ async function tryConsumetZoro(title: string, episode: number): Promise<StreamRe
       "https://consumet-api.vercel.app",
     ]
     
-    console.log("[v0] Consumet Zoro search:", title)
+    const titleVariations = getTitleVariations(title)
+    console.log("[v0] Consumet Zoro searching with variations:", titleVariations.slice(0, 3))
     
     for (const baseUrl of consumetApis) {
-      try {
-        // Search for anime on Zoro
-        const searchRes = await fetch(
-          `${baseUrl}/anime/zoro/${encodeURIComponent(title)}`,
-          { signal: AbortSignal.timeout(8000) }
-        )
-        
-        if (!searchRes.ok) continue
-        
-        const searchData = await searchRes.json()
-        const results = searchData.results || []
-        
-        if (!results.length) continue
-        
-        const anime = results[0]
-        console.log("[v0] Consumet Zoro found:", anime.id)
+      for (const searchTitle of titleVariations) {
+        try {
+          // Search for anime on Zoro
+          const searchRes = await fetch(
+            `${baseUrl}/anime/zoro/${encodeURIComponent(searchTitle)}`,
+            { signal: AbortSignal.timeout(8000) }
+          )
+          
+          if (!searchRes.ok) continue
+          
+          const searchData = await searchRes.json()
+          const results = searchData.results || []
+          
+          if (!results.length) continue
+          
+          const anime = results[0]
+          console.log("[v0] Consumet Zoro found:", anime.id, "for:", searchTitle)
         
         // Get anime info with episodes
         const infoRes = await fetch(
@@ -336,9 +379,10 @@ async function tryConsumetZoro(title: string, episode: number): Promise<StreamRe
             provider: "Zoro",
           }
         }
-      } catch (err) {
-        console.log("[v0] Consumet Zoro API error:", err)
-        continue
+        } catch (err) {
+          console.log("[v0] Consumet Zoro API error:", err)
+          continue
+        }
       }
     }
     
@@ -357,25 +401,27 @@ async function tryConsumetGogo(title: string, episode: number): Promise<StreamRe
       "https://consumet-api.vercel.app",
     ]
     
-    console.log("[v0] Consumet Gogo search:", title)
+    const titleVariations = getTitleVariations(title)
+    console.log("[v0] Consumet Gogo searching with variations:", titleVariations.slice(0, 3))
     
     for (const baseUrl of consumetApis) {
-      try {
-        // Search for anime
-        const searchRes = await fetch(
-          `${baseUrl}/anime/gogoanime/${encodeURIComponent(title)}`,
-          { signal: AbortSignal.timeout(8000) }
-        )
-        
-        if (!searchRes.ok) continue
-        
-        const searchData = await searchRes.json()
-        const results = searchData.results || []
-        
-        if (!results.length) continue
-        
-        const anime = results[0]
-        console.log("[v0] Consumet found:", anime.id)
+      for (const searchTitle of titleVariations) {
+        try {
+          // Search for anime
+          const searchRes = await fetch(
+            `${baseUrl}/anime/gogoanime/${encodeURIComponent(searchTitle)}`,
+            { signal: AbortSignal.timeout(8000) }
+          )
+          
+          if (!searchRes.ok) continue
+          
+          const searchData = await searchRes.json()
+          const results = searchData.results || []
+          
+          if (!results.length) continue
+          
+          const anime = results[0]
+          console.log("[v0] Consumet Gogo found:", anime.id, "for:", searchTitle)
         
         // Get anime info with episodes
         const infoRes = await fetch(
@@ -405,7 +451,7 @@ async function tryConsumetGogo(title: string, episode: number): Promise<StreamRe
         const sources = watchData.sources || []
         
         if (sources.length > 0) {
-          console.log("[v0] Consumet stream found:", sources.length, "sources")
+          console.log("[v0] Consumet Gogo stream found:", sources.length, "sources")
           
           return {
             success: true,
@@ -418,15 +464,16 @@ async function tryConsumetGogo(title: string, episode: number): Promise<StreamRe
             provider: "GogoAnime",
           }
         }
-      } catch (err) {
-        console.log("[v0] Consumet API error:", err)
-        continue
+        } catch (err) {
+          console.log("[v0] Consumet Gogo API error:", err)
+          continue
+        }
       }
     }
     
     return null
   } catch (error) {
-    console.error("[v0] Consumet error:", error)
+    console.error("[v0] Consumet Gogo error:", error)
     return null
   }
 }
@@ -505,7 +552,8 @@ export async function GET(request: Request): Promise<NextResponse<StreamResponse
   console.log("[v0] No streams found for:", title)
   return NextResponse.json({
     success: false,
+    sources: [],
     error: `Nenhuma fonte encontrada para "${title}" episodio ${episode}. Este anime pode ser muito novo ou nao estar disponivel nas fontes publicas.`,
     provider: "None",
-  }, { status: 404 })
+  } as StreamResponse & { error: string }, { status: 404 })
 }
