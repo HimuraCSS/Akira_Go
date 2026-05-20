@@ -529,14 +529,10 @@ export function VideoPlayer() {
               src={streamUrl}
               className="absolute inset-0 w-full h-full"
               allowFullScreen
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
               style={{ border: "none" }}
-              sandbox="allow-scripts allow-same-origin allow-presentation allow-forms"
               referrerPolicy="no-referrer"
             />
-            {/* Overlay to block popup clicks on iframe edges */}
-            <div className="absolute top-0 left-0 right-0 h-8 bg-gradient-to-b from-black/50 to-transparent pointer-events-none z-10" />
-            <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-black/50 to-transparent pointer-events-none z-10" />
           </div>
         )}
 
@@ -583,8 +579,8 @@ export function VideoPlayer() {
           </div>
         )}
 
-        {/* Error Overlay - show for any error */}
-        {(error || playerError) && (
+        {/* Error Overlay - show for any error, but not when iframe is playing */}
+        {(error || playerError) && !(isIframeSource && streamUrl) && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/90 z-20">
             <div className="flex flex-col items-center gap-4 p-6 text-center">
               <AlertCircle className="w-12 h-12 text-destructive" />

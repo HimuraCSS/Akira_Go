@@ -528,7 +528,13 @@ export async function GET(request: Request): Promise<NextResponse<StreamResponse
 
   console.log("[v0] Stream request:", title, "ep:", episode, "preferHls:", preferHls)
 
-  // Try AniWatch API first for HLS streams
+  // Try Megaplay iframe first (most reliable for recent anime)
+  const megaplayResult = await tryMegaplay(title, episode)
+  if (megaplayResult) {
+    return NextResponse.json(megaplayResult)
+  }
+
+  // Try AniWatch API for HLS streams
   if (preferHls) {
     const aniWatchResult = await tryAniWatch(title, episode)
     if (aniWatchResult) {
@@ -536,19 +542,19 @@ export async function GET(request: Request): Promise<NextResponse<StreamResponse
     }
   }
 
-  // Try Consumet Zoro (most reliable source)
+  // Try Consumet Zoro as fallback
   const zoroResult = await tryConsumetZoro(title, episode)
   if (zoroResult) {
     return NextResponse.json(zoroResult)
   }
 
-  // Try Consumet GogoAnime as fallback
+  // Try Consumet GogoAnime as last resort
   const gogoResult = await tryConsumetGogo(title, episode)
   if (gogoResult) {
     return NextResponse.json(gogoResult)
   }
 
-  // Return error - no valid streams found (skip Megaplay iframe that shows ads)
+  // Return error - no valid streams found
   console.log("[v0] No streams found for:", title)
   return NextResponse.json({
     success: false,
