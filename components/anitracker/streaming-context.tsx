@@ -28,6 +28,7 @@ export interface StreamSource {
 export interface Subtitle {
   url: string
   lang: string
+  label?: string
 }
 
 export interface Provider {
@@ -68,6 +69,7 @@ export interface Episode {
   animeId: string
   animeTitle: string
   consumetEpisodeId?: string
+  malId?: number
 }
 
 export interface AnimePlaylist {
@@ -530,6 +532,9 @@ export function StreamingProvider({ children }: { children: ReactNode }) {
         outro: streamInfo.outro,
         streamHeaders: streamInfo.headers,
       }))
+
+      // Fetch subtitles in background (don't block playback)
+      fetchSubtitles(episode.animeTitle, episode.number, episode.malId)
     } catch (error) {
       const message = error instanceof Error ? error.message : "Erro ao carregar stream"
       setState(prev => ({
@@ -540,6 +545,34 @@ export function StreamingProvider({ children }: { children: ReactNode }) {
       }))
     }
   }, [state.activeProvider])
+
+  // Fetch subtitles from multiple APIs
+  const fetchSubtitles = useCallback(async (title: string, episode: number, malId?: number) => {
+    try {
+      const params = new URLSearchParams({
+        title,
+        episode: episode.toString(),
+      })
+      if (malId) params.append("malId", malId.toString())
+
+      const response = await fetch(`/api/subtitles?${params}`)
+      if (!response.ok) return
+
+      const data = await response.json()
+      if (data.success && data.subtitles?.length > 0) {
+        setState(prev => ({
+          ...prev,
+          subtitles: data.subtitles.map((sub: { url: string; lang: string; label: string }) => ({
+            url: sub.url,
+            lang: sub.lang,
+            label: sub.label,
+          })),
+        }))
+      }
+    } catch {
+      // Silent fail - subtitles are optional
+    }
+  }, [])
 
   // Play episode by number from current playlist
   const playEpisodeByNumber = useCallback(async (episodeNumber: number) => {
