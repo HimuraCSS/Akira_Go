@@ -481,8 +481,13 @@ export function StreamingProvider({ children }: { children: ReactNode }) {
         consumetEpisodeId = foundEpisode.id
       }
 
-      // Get streaming sources
-      const streamInfo = await getStreamingSources(consumetEpisodeId, state.activeProvider)
+      // Get streaming sources - pass anime title for better search
+      const streamInfo = await getStreamingSources(
+        consumetEpisodeId, 
+        state.activeProvider,
+        "gogocdn",
+        episode.animeTitle
+      )
       
       if (!streamInfo || !streamInfo.sources || streamInfo.sources.length === 0) {
         throw new Error("Nenhuma fonte de streaming disponível")

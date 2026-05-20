@@ -14,7 +14,7 @@ const StatsCard = lazy(() => import("@/components/anitracker/stats-card").then(m
 const ProvidersCard = lazy(() => import("@/components/anitracker/providers-card").then(m => ({ default: m.ProvidersCard })))
 const TrackingCard = lazy(() => import("@/components/anitracker/tracking-card").then(m => ({ default: m.TrackingCard })))
 const AnimeCarousel = lazy(() => import("@/components/anitracker/anime-carousel").then(m => ({ default: m.AnimeCarousel })))
-const VideoPlayer = lazy(() => import("@/components/anitracker/video-player").then(m => ({ default: m.VideoPlayer })))
+const VideoPlayer = lazy(() => import("@/components/anitracker/artplayer-video").then(m => ({ default: m.VideoPlayer })))
 const AddonsModal = lazy(() => import("@/components/anitracker/addons-modal").then(m => ({ default: m.AddonsModal })))
 
 // Loading skeleton for lazy components

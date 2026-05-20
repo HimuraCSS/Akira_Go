@@ -1,7 +1,7 @@
 "use client"
 
-import { useState } from "react"
-import { X, Plus, Trash2, CheckCircle, AlertCircle, Loader2, RefreshCw, Plug, Subtitles, ListChecks } from "lucide-react"
+import { useState, useEffect } from "react"
+import { X, Plus, Trash2, CheckCircle, AlertCircle, Loader2, RefreshCw, Plug, Subtitles, ListChecks, Save } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { useStreaming, type Addon } from "./streaming-context"
+import { useAddonsStorage } from "@/hooks/use-addons-storage"
 
 interface AddonsModalProps {
   open: boolean
@@ -29,21 +30,41 @@ interface AddonsModalProps {
 
 export function AddonsModal({ open, onOpenChange }: AddonsModalProps) {
   const { addons, providers, activeProvider, addAddon, removeAddon, testAddon, setActiveProvider } = useStreaming()
+  const { storedAddons, addAddon: saveToStorage, removeAddon: removeFromStorage, isLoaded } = useAddonsStorage()
   const [newUrl, setNewUrl] = useState("")
   const [addonType, setAddonType] = useState<Addon["type"]>("scraper")
   const [isAdding, setIsAdding] = useState(false)
+
+  // Load stored addons when modal opens
+  useEffect(() => {
+    if (open && isLoaded && storedAddons.length > 0) {
+      storedAddons.forEach(stored => {
+        const exists = addons.some(a => a.url === stored.url)
+        if (!exists && stored.enabled) {
+          addAddon(stored.url, stored.type)
+        }
+      })
+    }
+  }, [open, isLoaded, storedAddons, addons, addAddon])
 
   const handleAddAddon = async () => {
     if (!newUrl) return
     
     setIsAdding(true)
     await addAddon(newUrl, addonType)
+    // Save to localStorage
+    saveToStorage({ name: "Custom Addon", url: newUrl, type: addonType, enabled: true })
     setIsAdding(false)
     setNewUrl("")
   }
 
-  const handleRemoveAddon = (id: string) => {
+  const handleRemoveAddon = (id: string, url: string) => {
     removeAddon(id)
+    // Remove from localStorage
+    const stored = storedAddons.find(s => s.url === url)
+    if (stored) {
+      removeFromStorage(stored.id)
+    }
   }
 
   const handleTestAddon = async (id: string) => {
@@ -216,7 +237,7 @@ export function AddonsModal({ open, onOpenChange }: AddonsModalProps) {
                         className="text-muted-foreground hover:text-destructive h-8 w-8"
                         onClick={(e) => {
                           e.stopPropagation()
-                          handleRemoveAddon(addon.id)
+                          handleRemoveAddon(addon.id, addon.url)
                         }}
                       >
                         <Trash2 className="w-4 h-4" />

@@ -171,35 +171,48 @@ function createDemoAnimeInfo(animeId: string): ConsumetAnimeInfo {
 export async function getStreamingSources(
   episodeId: string,
   provider: ConsumetProvider = "gogoanime",
-  server: string = "gogocdn"
+  server: string = "gogocdn",
+  animeTitle?: string
 ): Promise<ConsumetStreamInfo | null> {
   try {
-    // Handle demo episode IDs - return demo streams
-    if (episodeId.includes("demo-")) {
-      console.log("[v0] Using demo streams for:", episodeId)
-      return { sources: DEMO_STREAMS }
+    // Try the new addon API first if we have the anime title
+    if (animeTitle) {
+      const episodeNumber = episodeId.match(/episode-(\d+)$/)?.[1] || "1"
+      const addonResponse = await fetch(
+        `/api/addon/stream?title=${encodeURIComponent(animeTitle)}&episode=${episodeNumber}&provider=${provider}`
+      )
+      
+      if (addonResponse.ok) {
+        const addonData = await addonResponse.json()
+        if (addonData.sources && addonData.sources.length > 0) {
+          return {
+            sources: addonData.sources,
+            subtitles: addonData.subtitles,
+          }
+        }
+      }
     }
     
+    // Try direct episode ID API
     const response = await fetch(
       `/api/anime/watch/${encodeURIComponent(episodeId)}?provider=${provider}&server=${server}`
     )
     
     if (!response.ok) {
-      console.log("[v0] Watch API returned error, using demo streams")
-      return { sources: DEMO_STREAMS }
+      throw new Error("Watch API error")
     }
     
     const data = await response.json()
     
     if (data.error || !data.sources || data.sources.length === 0) {
-      console.log("[v0] No sources from API, using demo streams")
-      return { sources: DEMO_STREAMS }
+      throw new Error("No sources available")
     }
     
     return data
   } catch (error) {
-    console.log("[v0] Stream fetch failed, using demo streams:", error)
-    return { sources: DEMO_STREAMS }
+    console.error("[v0] Stream fetch failed:", error)
+    // Return null instead of demo streams - let the UI handle the error
+    return null
   }
 }
 
