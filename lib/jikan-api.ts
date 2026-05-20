@@ -11,20 +11,66 @@ import type { AnimeData } from "@/components/anitracker/anime-card"
 const JIKAN_BASE_URL = "https://api.jikan.moe/v4"
 
 // Rate limiting: Jikan has a 3 requests per second limit
-// We implement a simple queue to respect this
+// We implement a queue with exponential backoff
 let lastRequestTime = 0
-const MIN_REQUEST_INTERVAL = 350 // ms between requests
+let consecutiveRequests = 0
+const MIN_REQUEST_INTERVAL = 400 // ms between requests (increased from 350)
+const BACKOFF_MULTIPLIER = 1.5
+
+// Simple in-memory cache
+const cache = new Map<string, { data: unknown; timestamp: number }>()
+const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 
 async function rateLimitedFetch(url: string): Promise<Response> {
+  // Check cache first
+  const cached = cache.get(url)
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    return new Response(JSON.stringify(cached.data), {
+      status: 200,
+      headers: { "Content-Type": "application/json" }
+    })
+  }
+
   const now = Date.now()
   const timeSinceLastRequest = now - lastRequestTime
   
-  if (timeSinceLastRequest < MIN_REQUEST_INTERVAL) {
-    await new Promise(resolve => setTimeout(resolve, MIN_REQUEST_INTERVAL - timeSinceLastRequest))
+  // Calculate delay with backoff for consecutive requests
+  const delay = MIN_REQUEST_INTERVAL * (1 + consecutiveRequests * 0.2)
+  
+  if (timeSinceLastRequest < delay) {
+    await new Promise(resolve => setTimeout(resolve, delay - timeSinceLastRequest))
   }
   
   lastRequestTime = Date.now()
-  return fetch(url)
+  consecutiveRequests++
+  
+  // Reset consecutive counter after 2 seconds of inactivity
+  setTimeout(() => {
+    if (Date.now() - lastRequestTime > 2000) {
+      consecutiveRequests = 0
+    }
+  }, 2000)
+  
+  const response = await fetch(url)
+  
+  // Cache successful responses
+  if (response.ok) {
+    const data = await response.json()
+    cache.set(url, { data, timestamp: Date.now() })
+    return new Response(JSON.stringify(data), {
+      status: 200,
+      headers: { "Content-Type": "application/json" }
+    })
+  }
+  
+  // If rate limited, wait and retry once
+  if (response.status === 429) {
+    await new Promise(resolve => setTimeout(resolve, 1500))
+    lastRequestTime = Date.now()
+    return fetch(url)
+  }
+  
+  return response
 }
 
 // Types matching Jikan API response
