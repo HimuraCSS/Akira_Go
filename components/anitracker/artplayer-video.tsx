@@ -32,6 +32,7 @@ import { useStreaming } from "./streaming-context"
 import { cn } from "@/lib/utils"
 
 import { SubtitleSearch } from "./subtitle-search"
+import { artplayerAutoSkip, artplayerChapterHighlight } from "./artplayer-plugins"
 
 export function VideoPlayer() {
   const artRef = useRef<HTMLDivElement>(null)
@@ -64,6 +65,8 @@ export function VideoPlayer() {
     activeProvider,
     providers,
     clearError,
+    intro,
+    outro,
   } = useStreaming()
 
   const activeProviderData = providers.find(p => p.id === activeProvider)
@@ -218,6 +221,12 @@ export function VideoPlayer() {
             }
           },
         },
+        plugins: [
+          // Auto-skip intro/outro plugin
+          ...(intro || outro ? [artplayerAutoSkip({ intro, outro, autoSkipIntro: false, autoSkipOutro: false })] : []),
+          // Chapter highlight on progress bar
+          ...(intro || outro ? [artplayerChapterHighlight({ intro, outro })] : []),
+        ],
       })
       
       // Event listeners
@@ -241,7 +250,7 @@ export function VideoPlayer() {
       setPlayerError("Falha ao inicializar o player")
       setIsInitializing(false)
     }
-  }, [activeSubtitle, availableSources, currentSource, setIsBuffering, setIsPlaying, switchSource])
+  }, [activeSubtitle, availableSources, currentSource, setIsBuffering, setIsPlaying, switchSource, intro, outro])
 
   // Initialize player when stream URL changes - skip for iframe sources
   useEffect(() => {
@@ -327,7 +336,7 @@ export function VideoPlayer() {
           {/* PT-BR Subtitle Search */}
           {currentAnime && currentEpisode && (
             <SubtitleSearch
-              animeTitle={currentAnime.title}
+              animeTitle={currentAnime.animeTitle}
               episodeNumber={currentEpisode.number}
               onSubtitleSelect={(sub) => {
                 // Set the selected subtitle

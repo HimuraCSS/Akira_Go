@@ -51,6 +51,9 @@ export interface ConsumetStreamInfo {
   download?: string
   isIframe?: boolean
   isDemo?: boolean
+  intro?: { start: number; end: number }
+  outro?: { start: number; end: number }
+  provider?: string
 }
 
 // Available providers
@@ -190,7 +193,7 @@ export async function getStreamingSources(
       
       if (addonResponse.ok) {
         const addonData = await addonResponse.json()
-        console.log("[v0] Addon response:", addonData.success ? "success" : addonData.error, "isDemo:", addonData.isDemo, "isIframe:", addonData.isIframe)
+        console.log("[v0] Addon response:", addonData.success ? "success" : addonData.error, "isDemo:", addonData.isDemo, "isIframe:", addonData.isIframe, "provider:", addonData.provider)
         
         if (addonData.success && addonData.sources && addonData.sources.length > 0) {
           return {
@@ -201,6 +204,10 @@ export async function getStreamingSources(
             subtitles: addonData.subtitles,
             isIframe: addonData.isIframe,
             isDemo: addonData.isDemo,
+            intro: addonData.intro,
+            outro: addonData.outro,
+            headers: addonData.headers,
+            provider: addonData.provider,
           }
         }
       }

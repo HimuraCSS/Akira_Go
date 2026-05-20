@@ -102,6 +102,11 @@ interface StreamingState {
   isLoadingEpisodes: boolean
   isLoadingStream: boolean
   error: string | null
+  
+  // Stream metadata
+  intro?: { start: number; end: number }
+  outro?: { start: number; end: number }
+  streamHeaders?: Record<string, string>
 }
 
 interface StreamingContextType extends StreamingState {
@@ -219,6 +224,9 @@ export function StreamingProvider({ children }: { children: ReactNode }) {
     error: null,
     subtitles: [],
     activeSubtitle: null,
+    intro: undefined,
+    outro: undefined,
+    streamHeaders: undefined,
   })
 
   const setActiveProvider = useCallback((providerId: ConsumetProvider | string) => {
@@ -518,6 +526,9 @@ export function StreamingProvider({ children }: { children: ReactNode }) {
         isBuffering: false,
         hlsReady: true,
         isPlaying: true,
+        intro: streamInfo.intro,
+        outro: streamInfo.outro,
+        streamHeaders: streamInfo.headers,
       }))
     } catch (error) {
       const message = error instanceof Error ? error.message : "Erro ao carregar stream"
