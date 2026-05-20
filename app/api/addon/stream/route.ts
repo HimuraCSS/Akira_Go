@@ -248,6 +248,88 @@ async function searchJikan(title: string): Promise<{ mal_id: number; title: stri
   return null
 }
 
+// Try Consumet GogoAnime API
+async function tryConsumetGogo(title: string, episode: number): Promise<StreamResponse | null> {
+  try {
+    const consumetApis = [
+      "https://api.consumet.org",
+      "https://consumet-api.vercel.app",
+    ]
+    
+    console.log("[v0] Consumet Gogo search:", title)
+    
+    for (const baseUrl of consumetApis) {
+      try {
+        // Search for anime
+        const searchRes = await fetch(
+          `${baseUrl}/anime/gogoanime/${encodeURIComponent(title)}`,
+          { signal: AbortSignal.timeout(8000) }
+        )
+        
+        if (!searchRes.ok) continue
+        
+        const searchData = await searchRes.json()
+        const results = searchData.results || []
+        
+        if (!results.length) continue
+        
+        const anime = results[0]
+        console.log("[v0] Consumet found:", anime.id)
+        
+        // Get anime info with episodes
+        const infoRes = await fetch(
+          `${baseUrl}/anime/gogoanime/info/${anime.id}`,
+          { signal: AbortSignal.timeout(8000) }
+        )
+        
+        if (!infoRes.ok) continue
+        
+        const infoData = await infoRes.json()
+        const episodes = infoData.episodes || []
+        
+        const targetEp = episodes.find((ep: { number: number }) => ep.number === episode)
+        if (!targetEp) continue
+        
+        console.log("[v0] Consumet episode:", targetEp.id)
+        
+        // Get stream sources
+        const watchRes = await fetch(
+          `${baseUrl}/anime/gogoanime/watch/${targetEp.id}`,
+          { signal: AbortSignal.timeout(10000) }
+        )
+        
+        if (!watchRes.ok) continue
+        
+        const watchData = await watchRes.json()
+        const sources = watchData.sources || []
+        
+        if (sources.length > 0) {
+          console.log("[v0] Consumet stream found:", sources.length, "sources")
+          
+          return {
+            success: true,
+            sources: sources.map((s: { url: string; quality?: string; isM3U8?: boolean }) => ({
+              url: proxyUrl(s.url),
+              quality: s.quality || "Auto",
+              isM3U8: s.isM3U8 !== false,
+              type: "hls",
+            })),
+            provider: "GogoAnime",
+          }
+        }
+      } catch (err) {
+        console.log("[v0] Consumet API error:", err)
+        continue
+      }
+    }
+    
+    return null
+  } catch (error) {
+    console.error("[v0] Consumet error:", error)
+    return null
+  }
+}
+
 // Try Megaplay iframe as fallback
 async function tryMegaplay(title: string, episode: number): Promise<StreamResponse | null> {
   try {
@@ -306,7 +388,13 @@ export async function GET(request: Request): Promise<NextResponse<StreamResponse
     }
   }
 
-  // Fallback to Megaplay iframe
+  // Try Consumet GogoAnime as secondary HLS source
+  const consumetResult = await tryConsumetGogo(title, episode)
+  if (consumetResult) {
+    return NextResponse.json(consumetResult)
+  }
+
+  // Fallback to Megaplay iframe (with sandbox to block popups)
   const megaplayResult = await tryMegaplay(title, episode)
   if (megaplayResult) {
     return NextResponse.json(megaplayResult)

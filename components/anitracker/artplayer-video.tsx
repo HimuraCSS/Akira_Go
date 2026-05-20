@@ -524,13 +524,20 @@ export function VideoPlayer() {
       <div className="relative aspect-video w-full bg-black rounded-lg overflow-hidden border border-border">
         {/* Iframe Player - when source is iframe type */}
         {isIframeSource && streamUrl && !isLoadingStream && (
-          <iframe
-            src={streamUrl}
-            className="absolute inset-0 w-full h-full"
-            allowFullScreen
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            style={{ border: "none" }}
-          />
+          <div className="absolute inset-0 w-full h-full bg-black">
+            <iframe
+              src={streamUrl}
+              className="absolute inset-0 w-full h-full"
+              allowFullScreen
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              style={{ border: "none" }}
+              sandbox="allow-scripts allow-same-origin allow-presentation allow-forms"
+              referrerPolicy="no-referrer"
+            />
+            {/* Overlay to block popup clicks on iframe edges */}
+            <div className="absolute top-0 left-0 right-0 h-8 bg-gradient-to-b from-black/50 to-transparent pointer-events-none z-10" />
+            <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-black/50 to-transparent pointer-events-none z-10" />
+          </div>
         )}
 
         {/* ArtPlayer Container - when source is not iframe */}
