@@ -583,14 +583,14 @@ export function VideoPlayer() {
           </div>
         )}
 
-        {/* Error Overlay - only show when not iframe source */}
-        {(error || playerError) && !isIframeSource && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/80 z-20">
+        {/* Error Overlay - show for any error */}
+        {(error || playerError) && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/90 z-20">
             <div className="flex flex-col items-center gap-4 p-6 text-center">
               <AlertCircle className="w-12 h-12 text-destructive" />
-              <div className="space-y-1">
-                <p className="text-foreground font-medium">Erro ao reproduzir</p>
-                <p className="text-sm text-muted-foreground max-w-xs">
+              <div className="space-y-2">
+                <p className="text-foreground font-medium text-lg">Erro ao reproduzir</p>
+                <p className="text-sm text-muted-foreground max-w-sm">
                   {error || playerError}
                 </p>
               </div>

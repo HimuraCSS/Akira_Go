@@ -248,6 +248,107 @@ async function searchJikan(title: string): Promise<{ mal_id: number; title: stri
   return null
 }
 
+// Try Consumet Zoro/Aniwatch API (more reliable than GogoAnime)
+async function tryConsumetZoro(title: string, episode: number): Promise<StreamResponse | null> {
+  try {
+    const consumetApis = [
+      "https://api.consumet.org",
+      "https://consumet-api.vercel.app",
+    ]
+    
+    console.log("[v0] Consumet Zoro search:", title)
+    
+    for (const baseUrl of consumetApis) {
+      try {
+        // Search for anime on Zoro
+        const searchRes = await fetch(
+          `${baseUrl}/anime/zoro/${encodeURIComponent(title)}`,
+          { signal: AbortSignal.timeout(8000) }
+        )
+        
+        if (!searchRes.ok) continue
+        
+        const searchData = await searchRes.json()
+        const results = searchData.results || []
+        
+        if (!results.length) continue
+        
+        const anime = results[0]
+        console.log("[v0] Consumet Zoro found:", anime.id)
+        
+        // Get anime info with episodes
+        const infoRes = await fetch(
+          `${baseUrl}/anime/zoro/info?id=${anime.id}`,
+          { signal: AbortSignal.timeout(8000) }
+        )
+        
+        if (!infoRes.ok) continue
+        
+        const infoData = await infoRes.json()
+        const episodes = infoData.episodes || []
+        
+        const targetEp = episodes.find((ep: { number: number }) => ep.number === episode)
+        if (!targetEp) continue
+        
+        console.log("[v0] Consumet Zoro episode:", targetEp.id)
+        
+        // Get stream sources (sub by default)
+        const watchRes = await fetch(
+          `${baseUrl}/anime/zoro/watch?episodeId=${targetEp.id}`,
+          { signal: AbortSignal.timeout(10000) }
+        )
+        
+        if (!watchRes.ok) continue
+        
+        const watchData = await watchRes.json()
+        const sources = watchData.sources || []
+        
+        if (sources.length > 0) {
+          console.log("[v0] Consumet Zoro stream found:", sources.length, "sources")
+          
+          // Validate first source is accessible
+          const firstSource = sources[0]
+          try {
+            const validateRes = await fetch(firstSource.url, { 
+              method: 'HEAD',
+              signal: AbortSignal.timeout(5000)
+            })
+            if (!validateRes.ok && validateRes.status !== 200 && validateRes.status !== 206) {
+              console.log("[v0] Stream validation failed:", validateRes.status)
+              continue
+            }
+          } catch {
+            // If HEAD fails, try anyway - some servers don't support HEAD
+          }
+          
+          return {
+            success: true,
+            sources: sources.map((s: { url: string; quality?: string; isM3U8?: boolean }) => ({
+              url: proxyUrl(s.url),
+              quality: s.quality || "Auto",
+              isM3U8: s.isM3U8 !== false,
+              type: "hls",
+            })),
+            subtitles: watchData.subtitles?.map((sub: { url: string; lang: string }) => ({
+              url: sub.url,
+              lang: sub.lang,
+            })) || [],
+            provider: "Zoro",
+          }
+        }
+      } catch (err) {
+        console.log("[v0] Consumet Zoro API error:", err)
+        continue
+      }
+    }
+    
+    return null
+  } catch (error) {
+    console.error("[v0] Consumet Zoro error:", error)
+    return null
+  }
+}
+
 // Try Consumet GogoAnime API
 async function tryConsumetGogo(title: string, episode: number): Promise<StreamResponse | null> {
   try {
@@ -388,24 +489,23 @@ export async function GET(request: Request): Promise<NextResponse<StreamResponse
     }
   }
 
-  // Try Consumet GogoAnime as secondary HLS source
-  const consumetResult = await tryConsumetGogo(title, episode)
-  if (consumetResult) {
-    return NextResponse.json(consumetResult)
+  // Try Consumet Zoro (most reliable source)
+  const zoroResult = await tryConsumetZoro(title, episode)
+  if (zoroResult) {
+    return NextResponse.json(zoroResult)
   }
 
-  // Fallback to Megaplay iframe (with sandbox to block popups)
-  const megaplayResult = await tryMegaplay(title, episode)
-  if (megaplayResult) {
-    return NextResponse.json(megaplayResult)
+  // Try Consumet GogoAnime as fallback
+  const gogoResult = await tryConsumetGogo(title, episode)
+  if (gogoResult) {
+    return NextResponse.json(gogoResult)
   }
 
-  // Last resort: demo streams
-  console.log("[v0] Using demo streams")
+  // Return error - no valid streams found (skip Megaplay iframe that shows ads)
+  console.log("[v0] No streams found for:", title)
   return NextResponse.json({
-    success: true,
-    sources: DEMO_STREAMS,
-    isDemo: true,
-    provider: "Demo",
-  })
+    success: false,
+    error: `Nenhuma fonte encontrada para "${title}" episodio ${episode}. Este anime pode ser muito novo ou nao estar disponivel nas fontes publicas.`,
+    provider: "None",
+  }, { status: 404 })
 }
