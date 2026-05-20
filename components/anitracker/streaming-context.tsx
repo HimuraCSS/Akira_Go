@@ -22,6 +22,7 @@ export interface StreamSource {
   url: string
   isM3U8: boolean
   status: "active" | "buffering" | "error"
+  type?: "hls" | "mp4" | "iframe"
 }
 
 export interface Subtitle {
@@ -501,6 +502,7 @@ export function StreamingProvider({ children }: { children: ReactNode }) {
         url: source.url,
         isM3U8: source.isM3U8,
         status: "active" as const,
+        type: (source.type || (source.isM3U8 ? "hls" : "mp4")) as StreamSource["type"],
       }))
 
       // Get best quality source

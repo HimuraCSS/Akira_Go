@@ -73,15 +73,15 @@ export function VideoPlayer() {
                           currentSource.url?.includes("bitdash-a.akamaihd.net") ||
                           currentSource.url?.includes("plyr.io")
       const isIframe = currentSource.type === "iframe" || 
-                       (!currentSource.isM3U8 && !currentSource.url?.includes(".mp4") && !currentSource.url?.includes(".m3u8"))
+                       currentSource.url?.includes("megaplay.buzz") ||
+                       currentSource.url?.includes("/embed/") ||
+                       currentSource.url?.includes("/stream/mal/")
       
       setIsDemo(isDemoSource)
       setIsIframeSource(isIframe && !isDemoSource)
       
       if (isDemoSource) {
         setDemoMessage("Vídeo de demonstração - fontes reais indisponíveis")
-      } else if (isIframe) {
-        setDemoMessage(null)
       } else {
         setDemoMessage(null)
       }

@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server"
 
-// AniPub API - Free, no auth, CORS enabled
-const ANIPUB_BASE = "https://anipub.xyz"
+// Jikan API for anime metadata (MyAnimeList)
+const JIKAN_BASE = "https://api.jikan.moe/v4"
+
+// Megaplay embed URL format (from EliasDex)
+// Format: https://megaplay.buzz/stream/mal/{malId}/{episodeNumber}/{sub|dub}
+const MEGAPLAY_BASE = "https://megaplay.buzz"
 
 interface StreamSource {
   url: string
@@ -30,8 +34,8 @@ function normalizeTitle(title: string): string {
     .trim()
 }
 
-// Search anime in AniPub
-async function searchAniPub(title: string): Promise<{ id: number; name: string; epCount: number } | null> {
+// Search anime in Jikan (MyAnimeList)
+async function searchJikan(title: string): Promise<{ mal_id: number; title: string; episodes: number | null } | null> {
   const searchTerms = [
     title,
     normalizeTitle(title),
@@ -41,40 +45,49 @@ async function searchAniPub(title: string): Promise<{ id: number; name: string; 
   
   for (const term of searchTerms) {
     try {
-      // First try exact find
-      const findUrl = `${ANIPUB_BASE}/api/find/${encodeURIComponent(term)}`
-      console.log("[v0] AniPub find:", findUrl)
+      const url = `${JIKAN_BASE}/anime?q=${encodeURIComponent(term)}&limit=10&sfw=true`
+      console.log("[v0] Jikan search:", url)
       
-      const findRes = await fetch(findUrl, {
-        signal: AbortSignal.timeout(5000),
+      const response = await fetch(url, {
+        signal: AbortSignal.timeout(8000),
+        headers: { Accept: "application/json" },
       })
       
-      if (findRes.ok) {
-        const findData = await findRes.json()
-        if (findData.exist && findData.id) {
-          console.log("[v0] AniPub found:", findData)
-          return { id: findData.id, name: term, epCount: findData.ep || 0 }
+      if (!response.ok) {
+        console.log("[v0] Jikan response status:", response.status)
+        // Jikan has rate limiting - wait and retry
+        if (response.status === 429) {
+          await new Promise(r => setTimeout(r, 1000))
+          continue
         }
+        continue
       }
       
-      // Try search endpoint
-      const searchUrl = `${ANIPUB_BASE}/api/search/${encodeURIComponent(term)}`
-      console.log("[v0] AniPub search:", searchUrl)
+      const data = await response.json()
+      const results = data.data || []
       
-      const searchRes = await fetch(searchUrl, {
-        signal: AbortSignal.timeout(5000),
-      })
+      console.log("[v0] Jikan found", results.length, "results")
       
-      if (searchRes.ok) {
-        const results = await searchRes.json()
-        if (Array.isArray(results) && results.length > 0) {
-          const match = results[0]
-          console.log("[v0] AniPub search result:", match.Name)
-          return { id: match._id, name: match.Name, epCount: match.epCount || 0 }
+      if (results.length > 0) {
+        // Try exact match first
+        const lowerTitle = title.toLowerCase()
+        const exact = results.find((r: { title: string }) => 
+          r.title.toLowerCase() === lowerTitle ||
+          r.title_english?.toLowerCase() === lowerTitle
+        )
+        
+        if (exact) {
+          console.log("[v0] Found exact match:", exact.title, "MAL ID:", exact.mal_id)
+          return { mal_id: exact.mal_id, title: exact.title, episodes: exact.episodes }
         }
+        
+        // Return first result if no exact match
+        const first = results[0]
+        console.log("[v0] Using first result:", first.title, "MAL ID:", first.mal_id)
+        return { mal_id: first.mal_id, title: first.title, episodes: first.episodes }
       }
     } catch (error) {
-      console.log("[v0] AniPub error:", error)
+      console.log("[v0] Jikan search error:", error)
       continue
     }
   }
@@ -82,175 +95,100 @@ async function searchAniPub(title: string): Promise<{ id: number; name: string; 
   return null
 }
 
-// Get streaming links from AniPub
-async function getAniPubStreams(animeId: number, episodeNumber: number): Promise<{ iframeUrl: string } | null> {
-  try {
-    const url = `${ANIPUB_BASE}/v1/api/details/${animeId}`
-    console.log("[v0] AniPub details:", url)
-    
-    const res = await fetch(url, {
-      signal: AbortSignal.timeout(8000),
-    })
-    
-    if (!res.ok) {
-      console.log("[v0] AniPub details failed:", res.status)
-      return null
-    }
-    
-    const data = await res.json()
-    
-    if (!data.local) {
-      console.log("[v0] AniPub no local data")
-      return null
-    }
-    
-    // Episode 1 is in local.link, Episode 2+ is in local.ep array
-    let iframeUrl: string | null = null
-    
-    if (episodeNumber === 1 && data.local.link) {
-      // Episode 1 is the top-level link
-      iframeUrl = data.local.link.replace("src=", "")
-    } else if (data.local.ep && Array.isArray(data.local.ep)) {
-      // Episode 2+ is in the ep array (index 0 = ep 2, index 1 = ep 3, etc.)
-      const epIndex = episodeNumber - 2
-      if (epIndex >= 0 && epIndex < data.local.ep.length && data.local.ep[epIndex]?.link) {
-        iframeUrl = data.local.ep[epIndex].link.replace("src=", "")
-      }
-    }
-    
-    if (!iframeUrl) {
-      console.log("[v0] AniPub no iframe URL for episode", episodeNumber)
-      return null
-    }
-    
-    console.log("[v0] AniPub iframe URL:", iframeUrl)
-    return { iframeUrl }
-  } catch (error) {
-    console.log("[v0] AniPub streams error:", error)
-    return null
-  }
-}
-
-// Extract direct video URL from iframe page
-async function extractDirectUrl(iframeUrl: string): Promise<string | null> {
-  try {
-    // If already a direct URL, return it
-    if (iframeUrl.includes(".m3u8") || iframeUrl.includes(".mp4")) {
-      return iframeUrl
-    }
-    
-    // Try to fetch and extract
-    const res = await fetch(iframeUrl, {
-      signal: AbortSignal.timeout(5000),
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-      },
-    })
-    
-    if (!res.ok) return null
-    
-    const html = await res.text()
-    
-    // Look for .m3u8 URLs
-    const m3u8Match = html.match(/https?:\/\/[^"'\s<>]+\.m3u8[^"'\s<>]*/i)
-    if (m3u8Match) {
-      console.log("[v0] Extracted m3u8:", m3u8Match[0])
-      return m3u8Match[0]
-    }
-    
-    // Look for mp4 URLs
-    const mp4Match = html.match(/https?:\/\/[^"'\s<>]+\.mp4[^"'\s<>]*/i)
-    if (mp4Match) {
-      console.log("[v0] Extracted mp4:", mp4Match[0])
-      return mp4Match[0]
-    }
-    
-    return null
-  } catch {
-    return null
-  }
+// Build Megaplay embed URL
+function buildMegaplayUrl(malId: number, episode: number, category: string = "sub"): string {
+  return `${MEGAPLAY_BASE}/stream/mal/${malId}/${episode}/${category}`
 }
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const animeTitle = searchParams.get("title")
   const episodeNumber = parseInt(searchParams.get("episode") || "1")
+  const category = searchParams.get("category") || "sub" // sub or dub
   
-  console.log("[v0] Addon API request:", { animeTitle, episodeNumber })
+  console.log("[v0] Stream request:", { animeTitle, episodeNumber, category })
   
   if (!animeTitle) {
-    return NextResponse.json({
-      success: true,
-      sources: DEMO_STREAMS,
-      isDemo: true,
-      error: "Missing anime title",
-    })
+    return NextResponse.json(
+      { error: "Missing anime title parameter" },
+      { status: 400 }
+    )
   }
   
   try {
-    // Step 1: Search AniPub
-    console.log("[v0] Searching AniPub for:", animeTitle)
-    const anime = await searchAniPub(animeTitle)
+    // Step 1: Search anime in Jikan to get MAL ID
+    console.log("[v0] Step 1: Searching Jikan for MAL ID...")
+    const anime = await searchJikan(animeTitle)
     
-    if (anime) {
-      // Step 2: Get streaming links
-      console.log("[v0] Getting streams for ID:", anime.id)
-      const streams = await getAniPubStreams(anime.id, episodeNumber)
-      
-      if (streams?.iframeUrl) {
-        // Step 3: Try to extract direct URL
-        const directUrl = await extractDirectUrl(streams.iframeUrl)
-        
-        if (directUrl) {
-          return NextResponse.json({
-            success: true,
-            anime: { id: anime.id, title: anime.name },
-            episode: { number: episodeNumber },
-            sources: [{
-              url: directUrl,
-              quality: "auto",
-              isM3U8: directUrl.includes(".m3u8"),
-            }],
-            provider: "anipub",
-            isDemo: false,
-          })
-        }
-        
-        // Return iframe URL for embedding
-        return NextResponse.json({
-          success: true,
-          anime: { id: anime.id, title: anime.name },
-          episode: { number: episodeNumber },
-          sources: [{
-            url: streams.iframeUrl,
-            quality: "auto",
-            isM3U8: false,
-            type: "iframe",
-          }],
-          provider: "anipub",
-          isDemo: false,
-          isIframe: true,
-        })
-      }
+    if (!anime) {
+      console.log("[v0] Anime not found in Jikan, returning demo")
+      return NextResponse.json({
+        success: true,
+        isDemo: true,
+        anime: { title: animeTitle },
+        episode: { number: episodeNumber },
+        sources: DEMO_STREAMS,
+        message: "Anime not found - showing demo",
+      })
     }
     
-    // Fallback to demo
-    console.log("[v0] No sources found, using demo")
+    // Step 2: Build Megaplay embed URLs for sub and dub
+    const subUrl = buildMegaplayUrl(anime.mal_id, episodeNumber, "sub")
+    const dubUrl = buildMegaplayUrl(anime.mal_id, episodeNumber, "dub")
+    
+    console.log("[v0] Megaplay URLs built:", { subUrl, dubUrl })
+    
+    // Return iframe sources
     return NextResponse.json({
       success: true,
+      isDemo: false,
+      isIframe: true,
+      anime: {
+        mal_id: anime.mal_id,
+        title: anime.title,
+        episodes: anime.episodes,
+      },
+      episode: {
+        number: episodeNumber,
+      },
+      sources: [
+        {
+          url: category === "dub" ? dubUrl : subUrl,
+          quality: category === "dub" ? "DUB" : "SUB",
+          isM3U8: false,
+          type: "iframe",
+          name: category === "dub" ? "Dublado" : "Legendado",
+        },
+      ],
+      // Also provide alternative sources
+      alternativeSources: [
+        {
+          url: subUrl,
+          quality: "SUB",
+          type: "iframe",
+          name: "Legendado",
+        },
+        {
+          url: dubUrl,
+          quality: "DUB", 
+          type: "iframe",
+          name: "Dublado",
+        },
+      ],
+      embedUrl: category === "dub" ? dubUrl : subUrl,
+      provider: "megaplay",
+    })
+  } catch (error) {
+    console.error("[v0] Stream API error:", error)
+    
+    // Return demo on error
+    return NextResponse.json({
+      success: true,
+      isDemo: true,
       anime: { title: animeTitle },
       episode: { number: episodeNumber },
       sources: DEMO_STREAMS,
-      isDemo: true,
-      message: "Fontes reais indisponíveis",
-    })
-  } catch (error) {
-    console.error("[v0] Addon API error:", error)
-    return NextResponse.json({
-      success: true,
-      sources: DEMO_STREAMS,
-      isDemo: true,
-      error: "Internal error",
+      error: "Failed to fetch stream",
     })
   }
 }
