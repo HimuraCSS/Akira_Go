@@ -41,6 +41,7 @@ export function VideoPlayer() {
   const [isInitializing, setIsInitializing] = useState(false)
   const [isDemo, setIsDemo] = useState(false)
   const [demoMessage, setDemoMessage] = useState<string | null>(null)
+  const [isIframeSource, setIsIframeSource] = useState(false)
   
   const {
     currentAnime,
@@ -65,15 +66,22 @@ export function VideoPlayer() {
 
   const activeProviderData = providers.find(p => p.id === activeProvider)
 
-  // Check if current source is demo
+  // Check if current source is demo or iframe
   useEffect(() => {
     if (currentSource) {
       const isDemoSource = currentSource.url?.includes("test-streams.mux.dev") || 
                           currentSource.url?.includes("bitdash-a.akamaihd.net") ||
                           currentSource.url?.includes("plyr.io")
+      const isIframe = currentSource.type === "iframe" || 
+                       (!currentSource.isM3U8 && !currentSource.url?.includes(".mp4") && !currentSource.url?.includes(".m3u8"))
+      
       setIsDemo(isDemoSource)
+      setIsIframeSource(isIframe && !isDemoSource)
+      
       if (isDemoSource) {
         setDemoMessage("Vídeo de demonstração - fontes reais indisponíveis")
+      } else if (isIframe) {
+        setDemoMessage(null)
       } else {
         setDemoMessage(null)
       }
@@ -452,12 +460,25 @@ export function VideoPlayer() {
 
       {/* Main Player Container */}
       <div className="relative aspect-video w-full bg-black rounded-lg overflow-hidden border border-border">
-        {/* ArtPlayer Container */}
-        <div 
-          ref={artRef} 
-          className="absolute inset-0 w-full h-full"
-          style={{ aspectRatio: "16/9" }}
-        />
+        {/* Iframe Player - when source is iframe type */}
+        {isIframeSource && streamUrl && !isLoadingStream && (
+          <iframe
+            src={streamUrl}
+            className="absolute inset-0 w-full h-full"
+            allowFullScreen
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            style={{ border: "none" }}
+          />
+        )}
+
+        {/* ArtPlayer Container - when source is not iframe */}
+        {!isIframeSource && (
+          <div 
+            ref={artRef} 
+            className="absolute inset-0 w-full h-full"
+            style={{ aspectRatio: "16/9" }}
+          />
+        )}
 
         {/* Demo Notice Banner */}
         {isDemo && streamUrl && !isLoadingStream && (

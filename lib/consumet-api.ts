@@ -39,6 +39,7 @@ export interface ConsumetStreamSource {
   url: string
   quality: string
   isM3U8: boolean
+  type?: string // "hls" | "mp4" | "iframe"
 }
 
 export interface ConsumetStreamInfo {
@@ -46,7 +47,10 @@ export interface ConsumetStreamInfo {
     Referer?: string
   }
   sources: ConsumetStreamSource[]
+  subtitles?: { url: string; lang: string }[]
   download?: string
+  isIframe?: boolean
+  isDemo?: boolean
 }
 
 // Available providers
@@ -186,12 +190,17 @@ export async function getStreamingSources(
       
       if (addonResponse.ok) {
         const addonData = await addonResponse.json()
-        console.log("[v0] Addon response:", addonData.success ? "success" : addonData.error)
+        console.log("[v0] Addon response:", addonData.success ? "success" : addonData.error, "isDemo:", addonData.isDemo, "isIframe:", addonData.isIframe)
         
         if (addonData.success && addonData.sources && addonData.sources.length > 0) {
           return {
-            sources: addonData.sources,
+            sources: addonData.sources.map((s: { url: string; quality?: string; isM3U8?: boolean; type?: string }) => ({
+              ...s,
+              type: s.type || (s.isM3U8 ? "hls" : "mp4"),
+            })),
             subtitles: addonData.subtitles,
+            isIframe: addonData.isIframe,
+            isDemo: addonData.isDemo,
           }
         }
       }
