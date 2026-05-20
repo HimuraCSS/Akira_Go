@@ -342,3 +342,392 @@ export const GENRE_IDS = {
   SUPERNATURAL: 37,
   THRILLER: 41,
 } as const
+
+// ============================================================================
+// ADDITIONAL API FUNCTIONS
+// ============================================================================
+
+/**
+ * Fetch anime schedule (weekly airing schedule)
+ */
+export async function fetchAnimeSchedule(day?: string): Promise<Record<string, AnimeData[]>> {
+  try {
+    const url = day 
+      ? `${JIKAN_BASE_URL}/schedules?filter=${day}&sfw=true`
+      : `${JIKAN_BASE_URL}/schedules?sfw=true`
+    
+    const response = await rateLimitedFetch(url)
+    
+    if (!response.ok) {
+      throw new Error(`Jikan API error: ${response.status}`)
+    }
+    
+    const data: JikanResponse<JikanAnime[]> = await response.json()
+    
+    // Group by day if fetching all days
+    if (!day) {
+      const schedule: Record<string, AnimeData[]> = {
+        monday: [],
+        tuesday: [],
+        wednesday: [],
+        thursday: [],
+        friday: [],
+        saturday: [],
+        sunday: [],
+      }
+      
+      data.data.forEach(anime => {
+        const broadcastDay = anime.broadcast?.day?.toLowerCase() || "unknown"
+        const dayKey = broadcastDay.replace("s", "") // "mondays" -> "monday"
+        if (schedule[dayKey]) {
+          schedule[dayKey].push(transformJikanAnime(anime))
+        }
+      })
+      
+      return schedule
+    }
+    
+    return { [day]: data.data.map(transformJikanAnime) }
+  } catch (error) {
+    console.error("Failed to fetch anime schedule:", error)
+    return {}
+  }
+}
+
+/**
+ * Fetch anime episodes list
+ */
+export async function fetchAnimeEpisodes(malId: string | number, page: number = 1): Promise<{
+  episodes: Array<{
+    mal_id: number
+    title: string
+    title_japanese: string | null
+    title_romanji: string | null
+    aired: string | null
+    filler: boolean
+    recap: boolean
+  }>
+  pagination: { has_next_page: boolean; last_visible_page: number }
+}> {
+  try {
+    const response = await rateLimitedFetch(
+      `${JIKAN_BASE_URL}/anime/${malId}/episodes?page=${page}`
+    )
+    
+    if (!response.ok) {
+      throw new Error(`Jikan API error: ${response.status}`)
+    }
+    
+    const data = await response.json()
+    return {
+      episodes: data.data || [],
+      pagination: data.pagination || { has_next_page: false, last_visible_page: 1 }
+    }
+  } catch (error) {
+    console.error("Failed to fetch anime episodes:", error)
+    return { episodes: [], pagination: { has_next_page: false, last_visible_page: 1 } }
+  }
+}
+
+/**
+ * Fetch anime characters
+ */
+export async function fetchAnimeCharacters(malId: string | number): Promise<Array<{
+  character: {
+    mal_id: number
+    name: string
+    images: { jpg: { image_url: string }; webp: { image_url: string } }
+  }
+  role: string
+  voice_actors: Array<{
+    person: { mal_id: number; name: string; images: { jpg: { image_url: string } } }
+    language: string
+  }>
+}>> {
+  try {
+    const response = await rateLimitedFetch(
+      `${JIKAN_BASE_URL}/anime/${malId}/characters`
+    )
+    
+    if (!response.ok) {
+      throw new Error(`Jikan API error: ${response.status}`)
+    }
+    
+    const data = await response.json()
+    return data.data || []
+  } catch (error) {
+    console.error("Failed to fetch anime characters:", error)
+    return []
+  }
+}
+
+/**
+ * Fetch anime relations (sequels, prequels, etc.)
+ */
+export async function fetchAnimeRelations(malId: string | number): Promise<Array<{
+  relation: string
+  entry: Array<{
+    mal_id: number
+    type: string
+    name: string
+    url: string
+  }>
+}>> {
+  try {
+    const response = await rateLimitedFetch(
+      `${JIKAN_BASE_URL}/anime/${malId}/relations`
+    )
+    
+    if (!response.ok) {
+      throw new Error(`Jikan API error: ${response.status}`)
+    }
+    
+    const data = await response.json()
+    return data.data || []
+  } catch (error) {
+    console.error("Failed to fetch anime relations:", error)
+    return []
+  }
+}
+
+/**
+ * Fetch anime streaming links (official)
+ */
+export async function fetchAnimeStreaming(malId: string | number): Promise<Array<{
+  name: string
+  url: string
+}>> {
+  try {
+    const response = await rateLimitedFetch(
+      `${JIKAN_BASE_URL}/anime/${malId}/streaming`
+    )
+    
+    if (!response.ok) {
+      throw new Error(`Jikan API error: ${response.status}`)
+    }
+    
+    const data = await response.json()
+    return data.data || []
+  } catch (error) {
+    console.error("Failed to fetch anime streaming:", error)
+    return []
+  }
+}
+
+/**
+ * Fetch seasonal anime with specific year/season
+ */
+export async function fetchSeasonAnime(
+  year: number, 
+  season: "winter" | "spring" | "summer" | "fall",
+  limit: number = 25
+): Promise<AnimeData[]> {
+  try {
+    const response = await rateLimitedFetch(
+      `${JIKAN_BASE_URL}/seasons/${year}/${season}?limit=${limit}&sfw=true`
+    )
+    
+    if (!response.ok) {
+      throw new Error(`Jikan API error: ${response.status}`)
+    }
+    
+    const data: JikanResponse<JikanAnime[]> = await response.json()
+    return data.data.map(transformJikanAnime)
+  } catch (error) {
+    console.error("Failed to fetch season anime:", error)
+    return []
+  }
+}
+
+/**
+ * Fetch all available seasons
+ */
+export async function fetchSeasonsList(): Promise<Array<{ year: number; seasons: string[] }>> {
+  try {
+    const response = await rateLimitedFetch(`${JIKAN_BASE_URL}/seasons`)
+    
+    if (!response.ok) {
+      throw new Error(`Jikan API error: ${response.status}`)
+    }
+    
+    const data = await response.json()
+    return data.data || []
+  } catch (error) {
+    console.error("Failed to fetch seasons list:", error)
+    return []
+  }
+}
+
+/**
+ * Advanced anime search with filters
+ */
+export async function searchAnimeAdvanced(params: {
+  q?: string
+  page?: number
+  limit?: number
+  type?: "tv" | "movie" | "ova" | "special" | "ona" | "music"
+  score?: number
+  min_score?: number
+  max_score?: number
+  status?: "airing" | "complete" | "upcoming"
+  rating?: "g" | "pg" | "pg13" | "r17" | "r" | "rx"
+  genres?: number[]
+  genres_exclude?: number[]
+  order_by?: "mal_id" | "title" | "start_date" | "end_date" | "episodes" | "score" | "scored_by" | "rank" | "popularity" | "members" | "favorites"
+  sort?: "asc" | "desc"
+  start_date?: string
+  end_date?: string
+  sfw?: boolean
+}): Promise<{ data: AnimeData[]; pagination: { has_next_page: boolean; last_visible_page: number; current_page: number } }> {
+  try {
+    const searchParams = new URLSearchParams()
+    
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== "") {
+        if (Array.isArray(value)) {
+          searchParams.set(key, value.join(","))
+        } else {
+          searchParams.set(key, String(value))
+        }
+      }
+    })
+    
+    // Always enable SFW filter by default
+    if (!searchParams.has("sfw")) {
+      searchParams.set("sfw", "true")
+    }
+    
+    const response = await rateLimitedFetch(
+      `${JIKAN_BASE_URL}/anime?${searchParams.toString()}`
+    )
+    
+    if (!response.ok) {
+      throw new Error(`Jikan API error: ${response.status}`)
+    }
+    
+    const data = await response.json()
+    return {
+      data: data.data.map(transformJikanAnime),
+      pagination: data.pagination || { has_next_page: false, last_visible_page: 1, current_page: 1 }
+    }
+  } catch (error) {
+    console.error("Failed to search anime:", error)
+    return { data: [], pagination: { has_next_page: false, last_visible_page: 1, current_page: 1 } }
+  }
+}
+
+/**
+ * Fetch all anime genres
+ */
+export async function fetchAnimeGenres(): Promise<Array<{ mal_id: number; name: string; count: number }>> {
+  try {
+    const response = await rateLimitedFetch(`${JIKAN_BASE_URL}/genres/anime`)
+    
+    if (!response.ok) {
+      throw new Error(`Jikan API error: ${response.status}`)
+    }
+    
+    const data = await response.json()
+    return data.data || []
+  } catch (error) {
+    console.error("Failed to fetch anime genres:", error)
+    return []
+  }
+}
+
+/**
+ * Get current season info
+ */
+export function getCurrentSeason(): { year: number; season: "winter" | "spring" | "summer" | "fall" } {
+  const now = new Date()
+  const month = now.getMonth() + 1
+  const year = now.getFullYear()
+  
+  let season: "winter" | "spring" | "summer" | "fall"
+  
+  if (month >= 1 && month <= 3) {
+    season = "winter"
+  } else if (month >= 4 && month <= 6) {
+    season = "spring"
+  } else if (month >= 7 && month <= 9) {
+    season = "summer"
+  } else {
+    season = "fall"
+  }
+  
+  return { year, season }
+}
+
+/**
+ * Translate season name to Portuguese
+ */
+export function translateSeason(season: string): string {
+  const seasonMap: Record<string, string> = {
+    winter: "Inverno",
+    spring: "Primavera",
+    summer: "Verao",
+    fall: "Outono",
+  }
+  return seasonMap[season] || season
+}
+
+/**
+ * Translate day of week to Portuguese
+ */
+export function translateDay(day: string): string {
+  const dayMap: Record<string, string> = {
+    monday: "Segunda",
+    tuesday: "Terca",
+    wednesday: "Quarta",
+    thursday: "Quinta",
+    friday: "Sexta",
+    saturday: "Sabado",
+    sunday: "Domingo",
+  }
+  return dayMap[day.toLowerCase()] || day
+}
+
+// Extended JikanAnime type with broadcast info
+interface JikanAnime {
+  mal_id: number
+  title: string
+  title_japanese: string
+  images: {
+    jpg: {
+      image_url: string
+      large_image_url: string
+    }
+    webp: {
+      image_url: string
+      large_image_url: string
+    }
+  }
+  trailer?: {
+    images?: {
+      maximum_image_url?: string
+    }
+  }
+  score: number | null
+  episodes: number | null
+  status: string
+  synopsis: string | null
+  genres: { name: string }[]
+  year: number | null
+  aired?: {
+    prop?: {
+      from?: {
+        year?: number
+      }
+    }
+  }
+  studios: { name: string }[]
+  duration: string
+  rating: string
+  popularity: number
+  members: number
+  broadcast?: {
+    day?: string
+    time?: string
+    timezone?: string
+  }
+}
