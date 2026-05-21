@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useMemo } from "react"
 import { useParams, useRouter } from "next/navigation"
 import Image from "next/image"
 import Link from "next/link"
@@ -13,9 +13,9 @@ import {
   Check,
   Search,
   Download,
-  Settings,
   Loader2,
-  ArrowLeft
+  ArrowLeft,
+  X
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -143,32 +143,55 @@ export default function WatchPage() {
     }
   }, [currentEpisode, anime?.episodes, episodes.length, animeId, router])
 
-  const filteredEpisodes = episodes.filter(ep => 
-    ep.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    ep.mal_id.toString().includes(searchQuery)
-  )
-
   const totalEpisodes = anime?.episodes || episodes.length || 12
-  const episodeList = episodes.length > 0 
-    ? filteredEpisodes 
-    : Array.from({ length: totalEpisodes }, (_, i) => ({
-        mal_id: i + 1,
-        title: `Episódio ${i + 1}`,
-        aired: "",
-        filler: false,
-        recap: false
-      }))
+
+  // Generate episode list with search filtering
+  const episodeList = useMemo(() => {
+    const list = episodes.length > 0 
+      ? episodes 
+      : Array.from({ length: totalEpisodes }, (_, i) => ({
+          mal_id: i + 1,
+          title: `Episódio ${i + 1}`,
+          aired: "",
+          filler: false,
+          recap: false
+        }))
+
+    if (!searchQuery.trim()) return list
+
+    return list.filter(ep => {
+      const query = searchQuery.toLowerCase().trim()
+      const epNumber = ep.mal_id.toString()
+      const epTitle = (ep.title || `Episódio ${ep.mal_id}`).toLowerCase()
+      
+      return epNumber.includes(query) || 
+             epTitle.includes(query) ||
+             `ep ${epNumber}`.includes(query) ||
+             `episodio ${epNumber}`.includes(query) ||
+             `episódio ${epNumber}`.includes(query)
+    })
+  }, [episodes, totalEpisodes, searchQuery])
 
   const bannerImage = anime?.trailer?.images?.maximum_image_url || 
                       anime?.images?.webp?.large_image_url ||
                       anime?.images?.jpg?.large_image_url
 
+  // Loading State with Blurred Background
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <Loader2 className="w-12 h-12 animate-spin text-primary mx-auto" />
-          <p className="text-muted-foreground">Carregando...</p>
+      <div className="min-h-screen bg-background relative overflow-hidden">
+        {/* Animated gradient background */}
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-background to-primary/10 animate-pulse" />
+        <div className="absolute inset-0 backdrop-blur-3xl" />
+        
+        <div className="relative z-10 flex items-center justify-center min-h-screen">
+          <div className="text-center space-y-6">
+            <div className="relative">
+              <div className="w-20 h-20 border-4 border-primary/30 border-t-primary rounded-full animate-spin mx-auto" />
+              <Play className="w-8 h-8 text-primary absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+            </div>
+            <p className="text-muted-foreground animate-pulse">Carregando anime...</p>
+          </div>
         </div>
       </div>
     )
@@ -188,11 +211,25 @@ export default function WatchPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Hero Banner - Only shows while stream is loading */}
+    <div className="min-h-screen relative overflow-hidden">
+      {/* Blurred Background Image - Always visible */}
+      <div className="fixed inset-0 z-0">
+        <Image
+          src={bannerImage || ""}
+          alt=""
+          fill
+          className="object-cover scale-110"
+          priority
+        />
+        <div className="absolute inset-0 backdrop-blur-3xl" />
+        <div className="absolute inset-0 bg-background/80" />
+        <div className="absolute inset-0 bg-gradient-to-b from-background/50 via-background/70 to-background" />
+      </div>
+
+      {/* Hero Loading Overlay */}
       {isLoadingStream && (
         <div className="fixed inset-0 z-50">
-          {/* Background Image */}
+          {/* Sharp Background for Loading */}
           <div className="absolute inset-0">
             <Image
               src={bannerImage || ""}
@@ -201,19 +238,19 @@ export default function WatchPage() {
               className="object-cover"
               priority
             />
-            <div className="absolute inset-0 bg-gradient-to-r from-black via-black/80 to-black/40" />
-            <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-black/50" />
+            <div className="absolute inset-0 bg-gradient-to-r from-black via-black/80 to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent" />
           </div>
 
-          {/* Content */}
+          {/* Loading Content */}
           <div className="relative z-10 h-full flex">
             {/* Left Side - Anime Info */}
-            <div className="flex-1 flex flex-col justify-center px-8 lg:px-16 max-w-2xl">
+            <div className="flex-1 flex flex-col justify-center px-6 lg:px-16 max-w-3xl">
               {/* Back Button */}
               <Button
                 variant="ghost"
                 size="sm"
-                className="w-fit mb-6 text-white/70 hover:text-white"
+                className="w-fit mb-6 text-white/70 hover:text-white hover:bg-white/10"
                 onClick={() => router.back()}
               >
                 <ArrowLeft className="w-4 h-4 mr-2" />
@@ -222,50 +259,63 @@ export default function WatchPage() {
 
               {/* Season Badge */}
               {anime.season && (
-                <Badge className="w-fit mb-4 bg-primary/20 text-primary border-primary/30">
-                  {anime.season} {anime.year}
+                <Badge className="w-fit mb-4 bg-primary text-white border-0">
+                  {anime.season.charAt(0).toUpperCase() + anime.season.slice(1)} {anime.year}
                 </Badge>
               )}
 
               {/* Title */}
-              <h1 className="text-4xl lg:text-6xl font-black text-white uppercase tracking-tight mb-4 text-balance">
+              <h1 className="text-4xl md:text-5xl lg:text-7xl font-black text-white uppercase tracking-tight mb-4 drop-shadow-2xl">
                 {anime.title}
               </h1>
 
               {/* Synopsis */}
-              <p className="text-white/70 text-sm lg:text-base line-clamp-4 mb-6 max-w-lg">
+              <p className="text-white/80 text-sm lg:text-base line-clamp-3 mb-6 max-w-xl leading-relaxed">
                 {anime.synopsis}
               </p>
 
-              {/* Rating */}
-              <div className="flex items-center gap-4 mb-8">
-                <div className="flex items-center gap-2 bg-black/50 backdrop-blur-sm rounded-lg px-3 py-2">
-                  <Star className="w-5 h-5 text-yellow-500 fill-yellow-500" />
-                  <span className="text-white font-bold">{anime.score?.toFixed(1) || "N/A"}</span>
+              {/* Rating & Info */}
+              <div className="flex flex-wrap items-center gap-4 mb-8">
+                <div className="flex items-center gap-2">
+                  <Star className="w-6 h-6 text-yellow-400 fill-yellow-400" />
+                  <span className="text-2xl font-bold text-white">{anime.score?.toFixed(1) || "N/A"}</span>
                   <span className="text-white/50">/10</span>
                 </div>
-                <Badge variant="outline" className="border-white/30 text-white">
+                <Badge variant="outline" className="border-white/30 text-white bg-white/10">
                   {anime.rating || "TV"}
+                </Badge>
+                <Badge variant="outline" className="border-white/30 text-white bg-white/10">
+                  {totalEpisodes} Episódios
                 </Badge>
               </div>
 
-              {/* Loading Indicator */}
+              {/* Loading Button */}
               <div className="flex items-center gap-4">
-                <div className="flex items-center gap-3 bg-primary/20 backdrop-blur-sm rounded-full px-6 py-3">
-                  <Loader2 className="w-5 h-5 animate-spin text-primary" />
-                  <span className="text-white font-medium">
-                    Carregando Episódio {currentEpisode}...
-                  </span>
-                </div>
+                <Button
+                  size="lg"
+                  className="bg-primary hover:bg-primary/90 text-white gap-3 px-8"
+                  disabled
+                >
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Carregando Episódio {currentEpisode}...
+                </Button>
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="border-white/30 text-white hover:bg-white/10"
+                  onClick={() => setIsInList(!isInList)}
+                >
+                  {isInList ? <Check className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
+                </Button>
               </div>
 
               {/* Genres */}
               <div className="flex flex-wrap gap-2 mt-8">
-                {anime.genres?.slice(0, 4).map((genre) => (
+                {anime.genres?.slice(0, 5).map((genre) => (
                   <Badge 
                     key={genre.mal_id} 
                     variant="outline"
-                    className="border-white/20 text-white/80 bg-white/5"
+                    className="border-white/20 text-white/90 bg-white/5 backdrop-blur-sm"
                   >
                     {genre.name}
                   </Badge>
@@ -273,18 +323,18 @@ export default function WatchPage() {
               </div>
             </div>
 
-            {/* Right Side - Episode Thumbnails */}
-            <div className="hidden lg:flex flex-col justify-center pr-16 gap-4">
+            {/* Right Side - Episode Cards */}
+            <div className="hidden lg:flex flex-col justify-center pr-8 xl:pr-16 gap-3">
               {[currentEpisode - 1, currentEpisode, currentEpisode + 1]
                 .filter(ep => ep >= 1 && ep <= totalEpisodes)
                 .map((ep) => (
-                  <div
+                  <button
                     key={ep}
                     className={cn(
-                      "relative w-64 aspect-video rounded-lg overflow-hidden cursor-pointer transition-all",
+                      "relative w-56 xl:w-72 aspect-video rounded-xl overflow-hidden transition-all duration-300 group",
                       ep === currentEpisode 
-                        ? "ring-2 ring-primary scale-105" 
-                        : "opacity-60 hover:opacity-100"
+                        ? "ring-2 ring-primary scale-105 shadow-xl shadow-primary/20" 
+                        : "opacity-60 hover:opacity-100 hover:scale-102"
                     )}
                     onClick={() => router.push(`/assistir/${animeId}/${ep}`)}
                   >
@@ -294,45 +344,68 @@ export default function WatchPage() {
                       fill
                       className="object-cover"
                     />
-                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                      <Play className="w-8 h-8 text-white" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className={cn(
+                        "w-12 h-12 rounded-full flex items-center justify-center transition-transform group-hover:scale-110",
+                        ep === currentEpisode 
+                          ? "bg-primary" 
+                          : "bg-white/20 backdrop-blur-sm"
+                      )}>
+                        <Play className="w-5 h-5 text-white fill-white ml-0.5" />
+                      </div>
                     </div>
-                    <div className="absolute bottom-2 left-2 text-white text-sm font-medium">
-                      EP {ep}
-                    </div>
-                    {ep === currentEpisode && (
-                      <div className="absolute top-2 right-2">
+                    <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between">
+                      <span className="text-white font-semibold text-sm">
+                        Episódio {ep}
+                      </span>
+                      {ep === currentEpisode && (
                         <Badge className="bg-primary text-white text-xs">
                           ATUAL
                         </Badge>
-                      </div>
-                    )}
-                  </div>
+                      )}
+                    </div>
+                  </button>
                 ))}
             </div>
           </div>
         </div>
       )}
 
-      {/* Main Watch Layout */}
+      {/* Main Content */}
       <div className={cn(
-        "transition-opacity duration-500",
-        isLoadingStream ? "opacity-0" : "opacity-100"
+        "relative z-10 transition-all duration-500",
+        isLoadingStream ? "opacity-0 pointer-events-none" : "opacity-100"
       )}>
         {/* Header */}
-        <header className="sticky top-0 z-40 bg-background/95 backdrop-blur-sm border-b border-border">
-          <div className="flex items-center justify-between px-4 py-3">
+        <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border/50">
+          <div className="flex items-center justify-between px-4 lg:px-6 py-3">
             <div className="flex items-center gap-4">
-              <Button variant="ghost" size="icon" onClick={() => router.back()}>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={() => router.back()}
+                className="rounded-full"
+              >
                 <ArrowLeft className="w-5 h-5" />
               </Button>
-              <div>
-                <h1 className="font-semibold text-sm lg:text-base line-clamp-1">
-                  {anime.title}
-                </h1>
-                <p className="text-xs text-muted-foreground">
-                  Episódio {currentEpisode} de {totalEpisodes}
-                </p>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg overflow-hidden relative hidden sm:block">
+                  <Image
+                    src={anime.images.jpg.large_image_url}
+                    alt={anime.title}
+                    fill
+                    className="object-cover"
+                  />
+                </div>
+                <div>
+                  <h1 className="font-semibold text-sm lg:text-base line-clamp-1">
+                    {anime.title}
+                  </h1>
+                  <p className="text-xs text-muted-foreground">
+                    Episódio {currentEpisode} de {totalEpisodes}
+                  </p>
+                </div>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -340,6 +413,7 @@ export default function WatchPage() {
                 variant="ghost"
                 size="sm"
                 onClick={() => setIsInList(!isInList)}
+                className="hidden sm:flex"
               >
                 {isInList ? (
                   <>
@@ -353,15 +427,20 @@ export default function WatchPage() {
                   </>
                 )}
               </Button>
+              <Link href={`/anime/${animeId}`}>
+                <Button variant="outline" size="sm">
+                  Ver Detalhes
+                </Button>
+              </Link>
             </div>
           </div>
         </header>
 
-        <div className="flex flex-col lg:flex-row">
+        <div className="flex flex-col lg:flex-row min-h-[calc(100vh-4rem)]">
           {/* Player Section */}
-          <div className="flex-1">
+          <div className="flex-1 flex flex-col">
             {/* Video Player */}
-            <div className="relative aspect-video bg-black">
+            <div className="relative aspect-video bg-black/50 backdrop-blur-sm">
               {streamUrl ? (
                 <iframe
                   key={streamUrl}
@@ -372,36 +451,36 @@ export default function WatchPage() {
                 />
               ) : (
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                  <Loader2 className="w-10 h-10 animate-spin text-primary" />
                 </div>
               )}
             </div>
 
             {/* Controls Bar */}
-            <div className="bg-card border-b border-border px-4 py-3">
+            <div className="bg-card/80 backdrop-blur-sm border-b border-border/50 px-4 py-3">
               <div className="flex flex-wrap items-center justify-between gap-4">
                 {/* Playback Options */}
-                <div className="flex items-center gap-6">
-                  <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <div className="flex items-center gap-4 lg:gap-6">
+                  <label className="flex items-center gap-2 text-sm cursor-pointer hover:text-primary transition-colors">
                     <Checkbox 
                       checked={autoplay} 
                       onCheckedChange={(c) => setAutoplay(!!c)}
                     />
-                    Autoplay
+                    <span className="hidden sm:inline">Autoplay</span>
                   </label>
-                  <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <label className="flex items-center gap-2 text-sm cursor-pointer hover:text-primary transition-colors">
                     <Checkbox 
                       checked={autoSkip} 
                       onCheckedChange={(c) => setAutoSkip(!!c)}
                     />
-                    Auto Skip
+                    <span className="hidden sm:inline">Auto Skip</span>
                   </label>
-                  <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <label className="flex items-center gap-2 text-sm cursor-pointer hover:text-primary transition-colors">
                     <Checkbox 
                       checked={autoNext} 
                       onCheckedChange={(c) => setAutoNext(!!c)}
                     />
-                    Auto Next
+                    <span className="hidden sm:inline">Auto Next</span>
                   </label>
                 </div>
 
@@ -412,28 +491,30 @@ export default function WatchPage() {
                     size="sm"
                     disabled={currentEpisode <= 1}
                     onClick={() => navigateEpisode("prev")}
+                    className="gap-1"
                   >
-                    <ChevronLeft className="w-4 h-4 mr-1" />
-                    Anterior
+                    <ChevronLeft className="w-4 h-4" />
+                    <span className="hidden sm:inline">Anterior</span>
                   </Button>
                   <Button
                     variant="ghost"
                     size="sm"
                     disabled={currentEpisode >= totalEpisodes}
                     onClick={() => navigateEpisode("next")}
+                    className="gap-1"
                   >
-                    Próximo
-                    <ChevronRight className="w-4 h-4 ml-1" />
+                    <span className="hidden sm:inline">Próximo</span>
+                    <ChevronRight className="w-4 h-4" />
                   </Button>
                 </div>
               </div>
             </div>
 
             {/* Episode Info */}
-            <div className="p-4 lg:p-6">
+            <div className="flex-1 p-4 lg:p-6 bg-card/50 backdrop-blur-sm">
               <div className="flex flex-wrap items-start justify-between gap-4">
-                <div>
-                  <h2 className="text-xl font-semibold mb-1">
+                <div className="flex-1">
+                  <h2 className="text-xl lg:text-2xl font-bold mb-2">
                     Episódio {currentEpisode}: {episodes[currentEpisode - 1]?.title || anime.title}
                   </h2>
                   <p className="text-sm text-muted-foreground">
@@ -443,129 +524,151 @@ export default function WatchPage() {
 
                 <div className="flex items-center gap-3">
                   {/* SUB/DUB Selector */}
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium">SUB</span>
-                    <Select value={selectedSub} onValueChange={setSelectedSub}>
-                      <SelectTrigger className="w-24">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="sub">SUB</SelectItem>
-                        <SelectItem value="dub">DUB</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  <Select value={selectedSub} onValueChange={setSelectedSub}>
+                    <SelectTrigger className="w-28 bg-background/50">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="sub">Legendado</SelectItem>
+                      <SelectItem value="dub">Dublado</SelectItem>
+                    </SelectContent>
+                  </Select>
 
-                  <Button variant="outline" size="sm">
-                    <Download className="w-4 h-4 mr-2" />
-                    Download
+                  <Button variant="outline" size="sm" className="gap-2">
+                    <Download className="w-4 h-4" />
+                    <span className="hidden sm:inline">Download</span>
                   </Button>
                 </div>
               </div>
 
-              {/* Synopsis */}
-              <div className="mt-6">
-                <h3 className="font-semibold mb-2">Sinopse</h3>
-                <p className="text-sm text-muted-foreground line-clamp-3">
-                  {anime.synopsis}
-                </p>
-              </div>
-
-              {/* Genres */}
-              <div className="flex flex-wrap gap-2 mt-4">
+              {/* Genres & Studio */}
+              <div className="flex flex-wrap items-center gap-2 mt-4">
+                {anime.studios?.[0] && (
+                  <Badge className="bg-primary/20 text-primary border-primary/30">
+                    {anime.studios[0].name}
+                  </Badge>
+                )}
                 {anime.genres?.map((genre) => (
-                  <Badge key={genre.mal_id} variant="secondary">
+                  <Badge key={genre.mal_id} variant="secondary" className="bg-secondary/50">
                     {genre.name}
                   </Badge>
                 ))}
+              </div>
+
+              {/* Synopsis */}
+              <div className="mt-6 p-4 rounded-lg bg-background/50 border border-border/50">
+                <h3 className="font-semibold mb-2 text-sm text-muted-foreground uppercase tracking-wide">
+                  Sinopse
+                </h3>
+                <p className="text-sm leading-relaxed line-clamp-4">
+                  {anime.synopsis}
+                </p>
               </div>
             </div>
           </div>
 
           {/* Episodes Sidebar */}
-          <aside className="w-full lg:w-80 xl:w-96 border-l border-border bg-card/50">
-            <div className="sticky top-16 max-h-[calc(100vh-4rem)] overflow-hidden flex flex-col">
+          <aside className="w-full lg:w-80 xl:w-96 border-t lg:border-t-0 lg:border-l border-border/50 bg-card/50 backdrop-blur-sm">
+            <div className="sticky top-16 h-[50vh] lg:h-[calc(100vh-4rem)] overflow-hidden flex flex-col">
               {/* Header */}
-              <div className="p-4 border-b border-border">
-                <h3 className="font-semibold text-lg mb-3">Episódios</h3>
+              <div className="p-4 border-b border-border/50 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-semibold text-lg">Episódios</h3>
+                  <Badge variant="outline" className="text-xs">
+                    {episodeList.length} de {totalEpisodes}
+                  </Badge>
+                </div>
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input
-                    placeholder="Buscar..."
+                    placeholder="Buscar episódio..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-9"
+                    className="pl-9 pr-9 bg-background/50"
                   />
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery("")}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
               </div>
 
               {/* Episode List */}
               <div className="flex-1 overflow-y-auto">
-                {episodeList.map((ep) => {
-                  const epNumber = ep.mal_id
-                  const isCurrentEp = epNumber === currentEpisode
-                  
-                  return (
-                    <Link
-                      key={epNumber}
-                      href={`/assistir/${animeId}/${epNumber}`}
-                      className={cn(
-                        "flex items-center gap-3 px-4 py-3 border-b border-border/50 transition-colors",
-                        isCurrentEp 
-                          ? "bg-primary/10 border-l-2 border-l-primary" 
-                          : "hover:bg-muted/50"
-                      )}
-                    >
-                      <div className={cn(
-                        "flex items-center justify-center w-10 h-10 rounded-lg text-sm font-medium",
-                        isCurrentEp 
-                          ? "bg-primary text-primary-foreground" 
-                          : "bg-muted text-muted-foreground"
-                      )}>
-                        {isCurrentEp ? (
-                          <Play className="w-4 h-4 fill-current" />
-                        ) : (
-                          epNumber
+                {episodeList.length === 0 ? (
+                  <div className="p-8 text-center text-muted-foreground">
+                    <Search className="w-10 h-10 mx-auto mb-3 opacity-50" />
+                    <p className="text-sm">Nenhum episódio encontrado</p>
+                    <p className="text-xs mt-1">Tente buscar por número ou nome</p>
+                  </div>
+                ) : (
+                  episodeList.map((ep) => {
+                    const epNumber = ep.mal_id
+                    const isCurrentEp = epNumber === currentEpisode
+                    
+                    return (
+                      <Link
+                        key={epNumber}
+                        href={`/assistir/${animeId}/${epNumber}`}
+                        className={cn(
+                          "flex items-center gap-3 px-4 py-3 border-b border-border/30 transition-all",
+                          isCurrentEp 
+                            ? "bg-primary/10 border-l-2 border-l-primary" 
+                            : "hover:bg-muted/30"
                         )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className={cn(
-                          "text-sm font-medium truncate",
-                          isCurrentEp && "text-primary"
+                      >
+                        <div className={cn(
+                          "flex items-center justify-center w-10 h-10 rounded-lg text-sm font-bold transition-colors shrink-0",
+                          isCurrentEp 
+                            ? "bg-primary text-primary-foreground" 
+                            : "bg-muted/50 text-muted-foreground"
                         )}>
-                          {ep.title || `Episódio ${epNumber}`}
-                        </p>
-                        {ep.filler && (
-                          <Badge variant="outline" className="text-xs mt-1">
-                            Filler
-                          </Badge>
+                          {isCurrentEp ? (
+                            <Play className="w-4 h-4 fill-current" />
+                          ) : (
+                            epNumber
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className={cn(
+                            "text-sm font-medium truncate",
+                            isCurrentEp && "text-primary"
+                          )}>
+                            {ep.title || `Episódio ${epNumber}`}
+                          </p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            {ep.filler && (
+                              <Badge variant="outline" className="text-[10px] py-0 px-1.5 border-orange-500/50 text-orange-500">
+                                Filler
+                              </Badge>
+                            )}
+                            {ep.recap && (
+                              <Badge variant="outline" className="text-[10px] py-0 px-1.5 border-blue-500/50 text-blue-500">
+                                Recap
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                        {isCurrentEp && (
+                          <div className="flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                            <span className="text-[10px] font-medium text-green-500 uppercase">
+                              Playing
+                            </span>
+                          </div>
                         )}
-                      </div>
-                      {isCurrentEp && (
-                        <Badge className="bg-green-500/20 text-green-500 border-green-500/30">
-                          <span className="w-1.5 h-1.5 rounded-full bg-green-500 mr-1.5 animate-pulse" />
-                          PLAYING
-                        </Badge>
-                      )}
-                    </Link>
-                  )
-                })}
+                      </Link>
+                    )
+                  })
+                )}
               </div>
             </div>
           </aside>
         </div>
-
-        {/* Related Anime Section */}
-        <section className="border-t border-border p-6 lg:hidden">
-          <h3 className="font-semibold text-lg mb-4">Animes Relacionados</h3>
-          <div className="flex gap-4 overflow-x-auto pb-4">
-            {/* Placeholder for related anime */}
-            <div className="flex-shrink-0 w-32">
-              <div className="aspect-[3/4] bg-muted rounded-lg mb-2" />
-              <p className="text-xs text-muted-foreground">Em breve...</p>
-            </div>
-          </div>
-        </section>
       </div>
     </div>
   )
