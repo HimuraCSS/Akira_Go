@@ -29,11 +29,11 @@ interface AnimeDetails {
   title_english: string
   images: {
     jpg: { large_image_url: string; image_url: string }
-    webp: { large_image_url: string }
+    webp: { large_image_url: string; image_url: string }
   }
   trailer: {
     youtube_id: string
-    images: { maximum_image_url: string }
+    images: { maximum_image_url: string; large_image_url: string }
   }
   synopsis: string
   score: number
@@ -92,6 +92,35 @@ export default function AnimeDetailPage({ params }: { params: Promise<{ id: stri
   const [showGallery, setShowGallery] = useState(true)
   const [activeTab, setActiveTab] = useState<"info" | "characters" | "related">("info")
 
+  const [bannerImage, setBannerImage] = useState<string>("")
+
+  // Get highest quality banner image
+  const getBestBannerImage = async (animeData: AnimeDetails): Promise<string> => {
+    const youtubeId = animeData.trailer?.youtube_id
+    
+    if (youtubeId) {
+      // Try YouTube thumbnails in order of quality
+      const maxRes = `https://img.youtube.com/vi/${youtubeId}/maxresdefault.jpg`
+      const sdRes = `https://img.youtube.com/vi/${youtubeId}/sddefault.jpg`
+      
+      try {
+        const response = await fetch(maxRes, { method: 'HEAD' })
+        if (response.ok) {
+          return maxRes
+        }
+        return sdRes
+      } catch {
+        return sdRes
+      }
+    }
+    
+    // Fallback hierarchy
+    return animeData.trailer?.images?.maximum_image_url ||
+           animeData.trailer?.images?.large_image_url ||
+           animeData.images?.webp?.large_image_url || 
+           animeData.images?.jpg?.large_image_url
+  }
+
   useEffect(() => {
     const fetchAnimeDetails = async () => {
       try {
@@ -101,6 +130,10 @@ export default function AnimeDetailPage({ params }: { params: Promise<{ id: stri
         const response = await fetch(`https://api.jikan.moe/v4/anime/${resolvedParams.id}/full`)
         const data = await response.json()
         setAnime(data.data)
+        
+        // Get best banner image
+        const bestBanner = await getBestBannerImage(data.data)
+        setBannerImage(bestBanner)
 
         // Fetch pictures with delay to avoid rate limiting
         await new Promise(resolve => setTimeout(resolve, 400))
@@ -167,19 +200,24 @@ export default function AnimeDetailPage({ params }: { params: Promise<{ id: stri
   }
 
   if (!anime) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold mb-2">Anime não encontrado</h1>
-          <Button onClick={() => router.back()}>Voltar</Button>
+      return (
+        <div className="min-h-screen bg-background flex items-center justify-center">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold mb-2">Anime não encontrado</h1>
+            <Button onClick={() => router.back()}>Voltar</Button>
+          </div>
         </div>
-      </div>
-    )
-  }
+      )
+    }
 
-  const bannerImage = anime.trailer?.images?.maximum_image_url || 
-                      anime.images?.webp?.large_image_url || 
-                      anime.images?.jpg?.large_image_url
+  // Fallback banner if state not set yet
+  const displayBanner = bannerImage || 
+                        anime.trailer?.images?.maximum_image_url || 
+                        anime.images?.webp?.large_image_url || 
+                        anime.images?.jpg?.large_image_url
+
+  // Best quality poster image
+  const posterImage = anime.images?.webp?.large_image_url || anime.images?.jpg?.large_image_url
 
   return (
     <div className="min-h-screen bg-background">
@@ -188,10 +226,13 @@ export default function AnimeDetailPage({ params }: { params: Promise<{ id: stri
         {/* Background Image */}
         <div className="absolute inset-0">
           <Image
-            src={bannerImage}
+            src={displayBanner}
             alt={anime.title}
             fill
-            className="object-cover object-center"
+            quality={90}
+            className="object-cover object-top"
+            style={{ imageRendering: 'auto' }}
+            unoptimized={displayBanner?.includes('youtube.com')}
             priority
           />
           {/* Gradient Overlays */}
@@ -310,10 +351,12 @@ export default function AnimeDetailPage({ params }: { params: Promise<{ id: stri
             {/* Poster */}
             <div className="relative aspect-[2/3] rounded-xl overflow-hidden shadow-2xl border border-border">
               <Image
-                src={anime.images.jpg.large_image_url}
+                src={posterImage}
                 alt={anime.title}
                 fill
+                quality={90}
                 className="object-cover"
+                sizes="(max-width: 1024px) 100vw, 280px"
               />
             </div>
 
@@ -607,14 +650,16 @@ export default function AnimeDetailPage({ params }: { params: Promise<{ id: stri
               </button>
               
               {showGallery && pictures.length > 0 && (
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-1 p-1">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 p-2">
                   {pictures.slice(0, 9).map((pic, index) => (
-                    <div key={index} className="relative aspect-video overflow-hidden">
+                    <div key={index} className="relative aspect-[2/3] overflow-hidden rounded-lg">
                       <Image
                         src={pic.jpg.large_image_url || pic.jpg.image_url}
                         alt={`${anime.title} - Imagem ${index + 1}`}
                         fill
-                        className="object-cover hover:scale-110 transition-transform duration-300 cursor-pointer"
+                        quality={85}
+                        sizes="(max-width: 768px) 50vw, 33vw"
+                        className="object-cover hover:scale-105 transition-transform duration-300 cursor-pointer"
                       />
                     </div>
                   ))}

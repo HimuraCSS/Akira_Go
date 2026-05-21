@@ -34,6 +34,42 @@ export function HeroSection({ onOpenAddons, onWatchNow }: HeroSectionProps) {
   const activeProviderData = providers.find(p => p.id === activeProvider)
   const activeSources = providers.filter(p => p.enabled && p.status !== "offline").length
 
+  // Helper function to get best quality banner image
+  const getBestBannerImage = async (anime: any): Promise<string> => {
+    const youtubeId = anime.trailer?.youtube_id
+    
+    if (youtubeId) {
+      // Try YouTube thumbnails in order of quality (highest to lowest)
+      const youtubeQualities = [
+        `https://img.youtube.com/vi/${youtubeId}/maxresdefault.jpg`,
+        `https://img.youtube.com/vi/${youtubeId}/sddefault.jpg`,
+        `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`,
+      ]
+      
+      // Check if maxresdefault exists (some videos don't have it)
+      try {
+        const response = await fetch(youtubeQualities[0], { method: 'HEAD' })
+        if (response.ok) {
+          return youtubeQualities[0]
+        }
+        // Fall back to sddefault which is always available
+        return youtubeQualities[1]
+      } catch {
+        return youtubeQualities[1]
+      }
+    }
+    
+    // Fallback to trailer maximum image or large poster
+    if (anime.trailer?.images?.maximum_image_url) {
+      return anime.trailer.images.maximum_image_url
+    }
+    
+    // Use WebP for better quality when available
+    return anime.images?.webp?.large_image_url || 
+           anime.images?.jpg?.large_image_url || 
+           anime.images?.jpg?.image_url
+  }
+
   // Fetch top airing anime from current season
   useEffect(() => {
     async function fetchSeasonalAnime() {
@@ -49,39 +85,34 @@ export function HeroSection({ onOpenAddons, onWatchNow }: HeroSectionProps) {
         
         const data = await response.json()
         
-        // For each anime, try to get better banner from full details
-        const animesWithBanners: HeroAnime[] = []
-        
-        for (const anime of data.data.slice(0, 6)) {
-          // Use trailer thumbnail for HD banner (maxresdefault)
-          let bannerImage = anime.images?.jpg?.large_image_url
-          
-          if (anime.trailer?.youtube_id) {
-            // YouTube maxresdefault gives highest quality
-            bannerImage = `https://img.youtube.com/vi/${anime.trailer.youtube_id}/maxresdefault.jpg`
-          } else if (anime.trailer?.images?.maximum_image_url) {
-            bannerImage = anime.trailer.images.maximum_image_url
-          }
-          
-          animesWithBanners.push({
-            id: anime.mal_id.toString(),
-            title: anime.title,
-            image: anime.images?.jpg?.large_image_url || anime.images?.jpg?.image_url,
-            bannerImage,
-            score: anime.score || 0,
-            episodes: anime.episodes || 0,
-            status: anime.status || "Em exibicao",
-            synopsis: anime.synopsis || "",
-            genres: anime.genres?.map((g: any) => g.name) || [],
-            year: anime.year || new Date().getFullYear(),
-            studio: anime.studios?.[0]?.name || "",
-            studios: anime.studios?.map((s: any) => s.name) || [],
-            duration: anime.duration?.replace(" per ep", "") || "",
-            rating: anime.rating || "",
-            popularity: anime.popularity || 0,
-            members: anime.members || 0,
+        // For each anime, try to get best quality banner
+        const animesWithBanners: HeroAnime[] = await Promise.all(
+          data.data.slice(0, 6).map(async (anime: any) => {
+            const bannerImage = await getBestBannerImage(anime)
+            
+            return {
+              id: anime.mal_id.toString(),
+              title: anime.title,
+              // Use WebP for poster images (better quality)
+              image: anime.images?.webp?.large_image_url || 
+                     anime.images?.jpg?.large_image_url || 
+                     anime.images?.jpg?.image_url,
+              bannerImage,
+              score: anime.score || 0,
+              episodes: anime.episodes || 0,
+              status: anime.status || "Em exibicao",
+              synopsis: anime.synopsis || "",
+              genres: anime.genres?.map((g: any) => g.name) || [],
+              year: anime.year || new Date().getFullYear(),
+              studio: anime.studios?.[0]?.name || "",
+              studios: anime.studios?.map((s: any) => s.name) || [],
+              duration: anime.duration?.replace(" per ep", "") || "",
+              rating: anime.rating || "",
+              popularity: anime.popularity || 0,
+              members: anime.members || 0,
+            }
           })
-        }
+        )
         
         setAnimes(animesWithBanners.filter(a => a.score > 0))
       } catch (error) {
@@ -205,7 +236,10 @@ export function HeroSection({ onOpenAddons, onWatchNow }: HeroSectionProps) {
               priority={index === 0}
               loading={index < 2 ? "eager" : "lazy"}
               sizes="100vw"
-              className="object-cover object-center"
+              quality={90}
+              className="object-cover object-top"
+              style={{ imageRendering: 'auto' }}
+              unoptimized={anime.bannerImage?.includes('youtube.com')}
             />
           </div>
         ))}
