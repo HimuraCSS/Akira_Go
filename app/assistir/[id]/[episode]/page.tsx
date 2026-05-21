@@ -468,6 +468,26 @@ export default function WatchPage() {
               )}
             </div>
 
+            {/* Episode Progress Bar - Custom styled */}
+            <div className="bg-card/90 backdrop-blur-sm px-4 py-2 border-b border-border/30">
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-muted-foreground whitespace-nowrap">
+                  Ep {currentEpisode}
+                </span>
+                <div className="flex-1 h-1.5 bg-muted/30 rounded-full overflow-hidden group cursor-pointer">
+                  <div 
+                    className="h-full bg-gradient-to-r from-primary to-primary/80 rounded-full transition-all duration-300 relative"
+                    style={{ width: `${Math.min((currentEpisode / totalEpisodes) * 100, 100)}%` }}
+                  >
+                    <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-primary rounded-full shadow-lg shadow-primary/50 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </div>
+                </div>
+                <span className="text-xs text-muted-foreground whitespace-nowrap">
+                  {totalEpisodes} eps
+                </span>
+              </div>
+            </div>
+
             {/* Controls Bar */}
             <div className="bg-card/80 backdrop-blur-sm border-b border-border/50 px-4 py-3">
               <div className="flex flex-wrap items-center justify-between gap-4">
