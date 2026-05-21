@@ -3,7 +3,7 @@
 
 # Akira_Go
 
-## https://v0-anitracker-dashboard-swart.vercel.app/
+## https://akirago.vercel.app/
 
 New releases soon
 
