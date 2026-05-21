@@ -8,15 +8,25 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 import { useStreaming } from "./streaming-context"
-import type { AnimeData } from "./anime-card"
+import { getAniListPopularAiring } from "@/lib/anime-images-api"
 
-interface HeroAnime extends AnimeData {
-  bannerImage?: string
+interface HeroAnime {
+  id: string
+  idMal?: number
+  title: string
+  image: string
+  bannerImage: string
+  score: number
+  episodes: number
+  status: string
+  synopsis: string
+  genres: string[]
+  year: number
+  studio: string
+  duration: string
 }
 
 interface HeroSectionProps {
-  anime?: AnimeData
-  isLoading?: boolean
   onOpenAddons: () => void
   onWatchNow: () => void
 }
@@ -34,65 +44,45 @@ export function HeroSection({ onOpenAddons, onWatchNow }: HeroSectionProps) {
   const activeProviderData = providers.find(p => p.id === activeProvider)
   const activeSources = providers.filter(p => p.enabled && p.status !== "offline").length
 
-  // Fetch top airing anime from current season
+  // Fetch popular airing anime from AniList with HD banners
   useEffect(() => {
-    async function fetchSeasonalAnime() {
+    async function fetchAniListAnime() {
       try {
         setIsLoading(true)
         
-        // Fetch top airing anime (most popular currently airing)
-        const response = await fetch(
-          `https://api.jikan.moe/v4/top/anime?filter=airing&sfw=true&limit=8`
-        )
+        // Get popular airing anime from AniList (has native banner support)
+        const anilistData = await getAniListPopularAiring(12)
         
-        if (!response.ok) throw new Error("Failed to fetch")
-        
-        const data = await response.json()
-        
-        // For each anime, try to get better banner from full details
-        const animesWithBanners: HeroAnime[] = []
-        
-        for (const anime of data.data.slice(0, 6)) {
-          // Use trailer thumbnail for HD banner (maxresdefault)
-          let bannerImage = anime.images?.jpg?.large_image_url
-          
-          if (anime.trailer?.youtube_id) {
-            // YouTube maxresdefault gives highest quality
-            bannerImage = `https://img.youtube.com/vi/${anime.trailer.youtube_id}/maxresdefault.jpg`
-          } else if (anime.trailer?.images?.maximum_image_url) {
-            bannerImage = anime.trailer.images.maximum_image_url
-          }
-          
-          animesWithBanners.push({
-            id: anime.mal_id.toString(),
-            title: anime.title,
-            image: anime.images?.jpg?.large_image_url || anime.images?.jpg?.image_url,
-            bannerImage,
-            score: anime.score || 0,
+        // Filter only anime with banners and transform data
+        const animesWithBanners: HeroAnime[] = anilistData
+          .filter((anime: any) => anime.bannerImage) // Only include anime with banners
+          .slice(0, 6)
+          .map((anime: any) => ({
+            id: anime.idMal?.toString() || anime.id.toString(),
+            idMal: anime.idMal,
+            title: anime.title.english || anime.title.romaji,
+            image: anime.coverImage?.extraLarge || anime.coverImage?.large,
+            bannerImage: anime.bannerImage, // AniList native banner (1720x390+)
+            score: anime.averageScore ? anime.averageScore / 10 : 0,
             episodes: anime.episodes || 0,
-            status: anime.status || "Em exibicao",
-            synopsis: anime.synopsis || "",
-            genres: anime.genres?.map((g: any) => g.name) || [],
-            year: anime.year || new Date().getFullYear(),
-            studio: anime.studios?.[0]?.name || "",
-            studios: anime.studios?.map((s: any) => s.name) || [],
-            duration: anime.duration?.replace(" per ep", "") || "",
-            rating: anime.rating || "",
-            popularity: anime.popularity || 0,
-            members: anime.members || 0,
-          })
-        }
+            status: anime.status === "RELEASING" ? "Em lancamento" : anime.status,
+            synopsis: anime.description?.replace(/<[^>]*>/g, '') || "",
+            genres: anime.genres || [],
+            year: anime.seasonYear || new Date().getFullYear(),
+            studio: anime.studios?.nodes?.[0]?.name || "",
+            duration: anime.duration ? `${anime.duration} min` : "",
+          }))
         
-        setAnimes(animesWithBanners.filter(a => a.score > 0))
+        setAnimes(animesWithBanners)
       } catch (error) {
-        console.error("Failed to fetch seasonal anime:", error)
+        console.error("Failed to fetch AniList anime:", error)
         setAnimes([])
       } finally {
         setIsLoading(false)
       }
     }
     
-    fetchSeasonalAnime()
+    fetchAniListAnime()
   }, [])
 
   // Auto-rotate carousel every 8 seconds
@@ -205,6 +195,7 @@ export function HeroSection({ onOpenAddons, onWatchNow }: HeroSectionProps) {
               priority={index === 0}
               loading={index < 2 ? "eager" : "lazy"}
               sizes="100vw"
+              quality={95}
               className="object-cover object-center"
             />
           </div>
