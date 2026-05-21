@@ -1,6 +1,7 @@
 "use client"
 
 import Image from "next/image"
+import Link from "next/link"
 import { Star, Play, Info } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -19,6 +20,7 @@ export interface AnimeData {
   year?: number
   studio?: string
   duration?: string
+  malId?: number
 }
 
 interface AnimeCardProps {
@@ -126,8 +128,11 @@ export function AnimeCard({ anime, isHovered, onHover, onPlay, onInfo }: AnimeCa
               variant="outline" 
               className="border-border"
               onClick={() => onInfo?.(anime)}
+              asChild
             >
-              <Info className="w-3 h-3" />
+              <Link href={`/anime/${anime.malId || anime.id}`}>
+                <Info className="w-3 h-3" />
+              </Link>
             </Button>
           </div>
         </div>
