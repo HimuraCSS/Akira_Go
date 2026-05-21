@@ -21,6 +21,7 @@ import {
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { getAniListBanner } from "@/lib/anime-images-api"
 
 interface AnimeDetails {
   mal_id: number
@@ -93,32 +94,55 @@ export default function AnimeDetailPage({ params }: { params: Promise<{ id: stri
   const [activeTab, setActiveTab] = useState<"info" | "characters" | "related">("info")
 
   const [bannerImage, setBannerImage] = useState<string>("")
+  const [coverImage, setCoverImage] = useState<string>("")
 
-  // Get highest quality banner image
-  const getBestBannerImage = async (animeData: AnimeDetails): Promise<string> => {
-    const youtubeId = animeData.trailer?.youtube_id
+  // Get highest quality banner from AniList API (professional banners 1720x390+)
+  const getBestBannerImage = async (animeData: AnimeDetails): Promise<{ banner: string; cover: string }> => {
+    // Try AniList first for HD professional banners
+    const title = animeData.title_english || animeData.title
+    const anilistData = await getAniListBanner(title)
     
+    if (anilistData?.bannerImage) {
+      return {
+        banner: anilistData.bannerImage,
+        cover: anilistData.coverImage?.extraLarge || 
+               anilistData.coverImage?.large ||
+               animeData.images?.webp?.large_image_url ||
+               animeData.images?.jpg?.large_image_url
+      }
+    }
+    
+    // Fallback to YouTube thumbnail if no AniList banner
+    const youtubeId = animeData.trailer?.youtube_id
     if (youtubeId) {
-      // Try YouTube thumbnails in order of quality
       const maxRes = `https://img.youtube.com/vi/${youtubeId}/maxresdefault.jpg`
       const sdRes = `https://img.youtube.com/vi/${youtubeId}/sddefault.jpg`
       
       try {
         const response = await fetch(maxRes, { method: 'HEAD' })
         if (response.ok) {
-          return maxRes
+          return {
+            banner: maxRes,
+            cover: animeData.images?.webp?.large_image_url || animeData.images?.jpg?.large_image_url
+          }
         }
-        return sdRes
+        return {
+          banner: sdRes,
+          cover: animeData.images?.webp?.large_image_url || animeData.images?.jpg?.large_image_url
+        }
       } catch {
-        return sdRes
+        // Continue to next fallback
       }
     }
     
-    // Fallback hierarchy
-    return animeData.trailer?.images?.maximum_image_url ||
-           animeData.trailer?.images?.large_image_url ||
-           animeData.images?.webp?.large_image_url || 
-           animeData.images?.jpg?.large_image_url
+    // Final fallback
+    return {
+      banner: animeData.trailer?.images?.maximum_image_url ||
+              animeData.trailer?.images?.large_image_url ||
+              animeData.images?.webp?.large_image_url || 
+              animeData.images?.jpg?.large_image_url,
+      cover: animeData.images?.webp?.large_image_url || animeData.images?.jpg?.large_image_url
+    }
   }
 
   useEffect(() => {
@@ -131,9 +155,10 @@ export default function AnimeDetailPage({ params }: { params: Promise<{ id: stri
         const data = await response.json()
         setAnime(data.data)
         
-        // Get best banner image
-        const bestBanner = await getBestBannerImage(data.data)
-        setBannerImage(bestBanner)
+        // Get best banner and cover images from AniList
+        const { banner, cover } = await getBestBannerImage(data.data)
+        setBannerImage(banner)
+        setCoverImage(cover)
 
         // Fetch pictures with delay to avoid rate limiting
         await new Promise(resolve => setTimeout(resolve, 400))
@@ -216,23 +241,21 @@ export default function AnimeDetailPage({ params }: { params: Promise<{ id: stri
                         anime.images?.webp?.large_image_url || 
                         anime.images?.jpg?.large_image_url
 
-  // Best quality poster image
-  const posterImage = anime.images?.webp?.large_image_url || anime.images?.jpg?.large_image_url
+  // Best quality poster image (prefer AniList cover, fallback to MAL)
+  const posterImage = coverImage || anime.images?.webp?.large_image_url || anime.images?.jpg?.large_image_url
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Hero Banner */}
-      <div className="relative h-[75vh] overflow-hidden">
+      {/* Hero Banner - Professional aspect ratio optimized for AniList banners */}
+      <div className="relative h-[50vh] min-h-[350px] max-h-[500px] overflow-hidden">
         {/* Background Image */}
         <div className="absolute inset-0">
           <Image
             src={displayBanner}
             alt={anime.title}
             fill
-            quality={90}
-            className="object-cover object-top"
-            style={{ imageRendering: 'auto' }}
-            unoptimized={displayBanner?.includes('youtube.com')}
+            quality={95}
+            className="object-cover object-center"
             priority
           />
           {/* Gradient Overlays */}
