@@ -2,9 +2,11 @@
 
 import Image from "next/image"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { Star, Play, Info } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { useState } from "react"
 
 export interface AnimeData {
   id: string
@@ -32,6 +34,14 @@ interface AnimeCardProps {
 }
 
 export function AnimeCard({ anime, isHovered, onHover, onPlay, onInfo }: AnimeCardProps) {
+  const router = useRouter()
+  const [isNavigating, setIsNavigating] = useState(false)
+  
+  const handleWatch = () => {
+    setIsNavigating(true)
+    router.push(`/anime/${anime.malId || anime.id}`)
+  }
+
   const getStatusColor = (status: AnimeData["status"]) => {
     switch (status) {
       case "Airing":
@@ -56,9 +66,10 @@ export function AnimeCard({ anime, isHovered, onHover, onPlay, onInfo }: AnimeCa
 
   return (
     <div
-      className="group relative"
+      className="group relative cursor-pointer"
       onMouseEnter={() => onHover(anime.id)}
       onMouseLeave={() => onHover(null)}
+      onClick={handleWatch}
     >
       <div className="relative aspect-[2/3] rounded-lg overflow-hidden glass-card border border-border group-hover:border-primary/50 transition-all duration-300">
         <Image
@@ -118,16 +129,20 @@ export function AnimeCard({ anime, isHovered, onHover, onPlay, onInfo }: AnimeCa
             <Button 
               size="sm" 
               className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground"
-              onClick={() => onPlay?.(anime)}
+              onClick={handleWatch}
+              disabled={isNavigating}
             >
-              <Play className="w-3 h-3 mr-1" />
-              Assistir
+              {isNavigating ? (
+                <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-1" />
+              ) : (
+                <Play className="w-3 h-3 mr-1" />
+              )}
+              {isNavigating ? "Carregando..." : "Assistir"}
             </Button>
             <Button 
               size="sm" 
               variant="outline" 
               className="border-border"
-              onClick={() => onInfo?.(anime)}
               asChild
             >
               <Link href={`/anime/${anime.malId || anime.id}`}>

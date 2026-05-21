@@ -161,11 +161,10 @@ export function Header() {
                     ) : results.length > 0 ? (
                       <div className="max-h-96 overflow-y-auto">
                         {results.map((anime) => (
-                          <button
+                          <Link
                             key={anime.id}
-                            onClick={() => {
-                              clearSearch()
-                            }}
+                            href={`/anime/${anime.malId || anime.id}`}
+                            onClick={clearSearch}
                             className="w-full flex items-center gap-3 p-3 hover:bg-secondary/50 transition-colors text-left"
                           >
                             <div className="w-12 h-16 relative rounded overflow-hidden flex-shrink-0">
@@ -190,7 +189,7 @@ export function Header() {
                                 </span>
                               </div>
                             </div>
-                          </button>
+                          </Link>
                         ))}
                       </div>
                     ) : (

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import Image from "next/image"
+import { useRouter } from "next/navigation"
 import { Play, Settings, ChevronLeft, ChevronRight, Star, Calendar, Clock, Tv } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -21,16 +22,17 @@ interface HeroSectionProps {
 }
 
 export function HeroSection({ onOpenAddons, onWatchNow }: HeroSectionProps) {
+  const router = useRouter()
   const [currentIndex, setCurrentIndex] = useState(0)
   const [animes, setAnimes] = useState<HeroAnime[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isPaused, setIsPaused] = useState(false)
   const [isTransitioning, setIsTransitioning] = useState(false)
-  const { loadAnimeEpisodes, playEpisode, providers, activeProvider, isBuffering, isLoadingEpisodes, isLoadingStream } = useStreaming()
+  const [isNavigating, setIsNavigating] = useState(false)
+  const { providers, activeProvider } = useStreaming()
 
   const activeProviderData = providers.find(p => p.id === activeProvider)
   const activeSources = providers.filter(p => p.enabled && p.status !== "offline").length
-  const isStreamLoading = isBuffering || isLoadingEpisodes || isLoadingStream
 
   // Fetch top airing anime from current season
   useEffect(() => {
@@ -126,48 +128,13 @@ export function HeroSection({ onOpenAddons, onWatchNow }: HeroSectionProps) {
     }
   }, [currentIndex])
 
-  const handleWatchNow = useCallback(async () => {
+  const handleWatchNow = useCallback(() => {
     const currentAnime = animes[currentIndex]
     if (!currentAnime) return
     
-    try {
-      // Load anime episodes for the current hero anime
-      await loadAnimeEpisodes(currentAnime.id, currentAnime.title, currentAnime.image)
-      
-      // Small delay to ensure episodes are loaded
-      await new Promise(resolve => setTimeout(resolve, 500))
-      
-      // Play first episode
-      const firstEpisode = {
-        id: `${currentAnime.id}-ep-1`,
-        number: 1,
-        title: "Episodio 1",
-        thumbnail: currentAnime.image,
-        duration: currentAnime.duration || "24:00",
-        animeId: currentAnime.id,
-        animeTitle: currentAnime.title,
-      }
-      
-      await playEpisode(firstEpisode)
-      
-      // Scroll to player section after a brief delay
-      setTimeout(() => {
-        const playerSection = document.querySelector('[data-player-section]') || 
-                            document.querySelector('section.py-6') ||
-                            document.querySelector('[class*="artplayer"]')?.closest('section')
-        if (playerSection) {
-          playerSection.scrollIntoView({ behavior: 'smooth', block: 'start' })
-        } else {
-          // Fallback: scroll down by viewport height
-          window.scrollBy({ top: window.innerHeight * 0.7, behavior: 'smooth' })
-        }
-      }, 200)
-      
-      onWatchNow()
-    } catch (error) {
-      console.error("Failed to start playback:", error)
-    }
-  }, [animes, currentIndex, loadAnimeEpisodes, playEpisode, onWatchNow])
+    setIsNavigating(true)
+    router.push(`/anime/${currentAnime.id}`)
+  }, [animes, currentIndex, router])
 
   const currentAnime = animes[currentIndex]
 
@@ -308,9 +275,9 @@ export function HeroSection({ onOpenAddons, onWatchNow }: HeroSectionProps) {
                 size="lg" 
                 className="glow-effect bg-primary hover:bg-primary/90 text-primary-foreground font-bold px-8 py-6 text-lg shadow-lg shadow-primary/25"
                 onClick={handleWatchNow}
-                disabled={isStreamLoading}
+                disabled={isNavigating}
               >
-                {isStreamLoading ? (
+                {isNavigating ? (
                   <>
                     <div className="w-5 h-5 mr-2 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
                     Carregando...
