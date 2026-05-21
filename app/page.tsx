@@ -17,6 +17,7 @@ const TrackingCard = lazy(() => import("@/components/anitracker/tracking-card").
 const AnimeCarousel = lazy(() => import("@/components/anitracker/anime-carousel").then(m => ({ default: m.AnimeCarousel })))
 const VideoPlayer = lazy(() => import("@/components/anitracker/artplayer-video").then(m => ({ default: m.VideoPlayer })))
 const AddonsModal = lazy(() => import("@/components/anitracker/addons-modal").then(m => ({ default: m.AddonsModal })))
+const ContinueWatching = lazy(() => import("@/components/anitracker/continue-watching").then(m => ({ default: m.ContinueWatching })))
 
 // Loading skeleton for lazy components
 function CardSkeleton() {
@@ -126,6 +127,13 @@ function AkiraGoContent() {
             </Suspense>
           </div>
         </section>
+
+        {/* Continue Watching - from watch history */}
+        <div className="container mx-auto px-6 lg:px-8">
+          <Suspense fallback={null}>
+            <ContinueWatching />
+          </Suspense>
+        </div>
 
         {/* Trending Anime - Real API data */}
         <Suspense fallback={<SectionSkeleton />}>
