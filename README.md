@@ -1,4 +1,5 @@
-<img width="242" height="73" alt="image" src="https://github.com/user-attachments/assets/1bdda286-37d7-485c-a97c-6f1ed53b544e" />
+<img width="1456" height="720" alt="Gemini_Generated_Image_fz4mtxfz4mtxfz4m" src="https://github.com/user-attachments/assets/6eb5c8d0-a912-4996-a8f1-b64d7fb9b43a" />
+
 
 # Akira_Go
 
