@@ -1,3 +1,5 @@
+<img width="242" height="73" alt="image" src="https://github.com/user-attachments/assets/1bdda286-37d7-485c-a97c-6f1ed53b544e" />
+
 # Akira_Go
 
 This is a [Next.js](https://nextjs.org) project bootstrapped with [v0](https://v0.app).
