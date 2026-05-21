@@ -281,7 +281,7 @@ export default function AnimeDetailPage({ params }: { params: Promise<{ id: stri
 
             {/* Action Buttons */}
             <div className="flex flex-wrap gap-3">
-              <Link href={`/?watch=${anime.mal_id}`}>
+              <Link href={`/assistir/${anime.mal_id}/1`}>
                 <Button size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2">
                   <Play className="w-5 h-5 fill-current" />
                   Assistir Agora
