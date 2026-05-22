@@ -5,6 +5,12 @@
 
 ## https://akirago.vercel.app/
 
+
+<img width="300" height="300" alt="ezgif com-reverse (3)" src="https://github.com/user-attachments/assets/00706f3c-3be0-4ba5-b8f9-47f6e2563ef2" />
+
+
+
+
 New releases soon
 
 This is a [Next.js](https://nextjs.org) project bootstrapped with [v0](https://v0.app).
