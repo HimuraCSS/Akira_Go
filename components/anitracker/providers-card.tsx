@@ -1,6 +1,6 @@
 "use client"
 
-import { Plug, CheckCircle, XCircle, AlertCircle, ChevronDown, Server, Tv } from "lucide-react"
+import { Plug, CheckCircle, XCircle, AlertCircle, ChevronDown, Server, Tv, Globe, Languages } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
@@ -38,6 +38,7 @@ export function ProvidersCard() {
 
   const activeProviderData = providers.find(p => p.id === activeProvider)
   const enabledCount = providers.filter(p => p.enabled).length
+  const ptbrCount = providers.filter(p => p.enabled && p.languages?.includes("Portuguese")).length
 
   return (
     <Card className="glass-card glass-card-hover border-border">
@@ -50,6 +51,11 @@ export function ProvidersCard() {
           <Badge variant="outline" className="text-xs">
             {enabledCount} ativos
           </Badge>
+          {ptbrCount > 0 && (
+            <Badge variant="secondary" className="text-xs bg-green-500/20 text-green-500">
+              {ptbrCount} PT-BR
+            </Badge>
+          )}
         </CardTitle>
       </CardHeader>
       <CardContent className="px-4 pb-4 pt-0">
@@ -83,6 +89,11 @@ export function ProvidersCard() {
                 <div className="flex items-center gap-2">
                   <div className={cn("w-2 h-2 rounded-full", getStatusColor(provider.status))} />
                   <span className="text-xs font-medium text-foreground">{provider.name}</span>
+                  {provider.languages?.includes("Portuguese") && (
+                    <Badge variant="secondary" className="text-[10px] px-1 py-0 bg-green-500/20 text-green-500">
+                      PT-BR
+                    </Badge>
+                  )}
                   {provider.latency && (
                     <span className="text-xs text-muted-foreground">{provider.latency}ms</span>
                   )}

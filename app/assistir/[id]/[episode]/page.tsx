@@ -15,7 +15,10 @@ import {
   Download,
   Loader2,
   ArrowLeft,
-  X
+  X,
+  Server,
+  Globe,
+  Languages
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -81,6 +84,15 @@ export default function WatchPage() {
   const [selectedSub, setSelectedSub] = useState("sub")
   const [streamUrl, setStreamUrl] = useState<string | null>(null)
   const [isLoadingStream, setIsLoadingStream] = useState(false)
+  const [availableSources, setAvailableSources] = useState<Array<{
+    url: string
+    quality: string
+    providerId: string
+    providerName: string
+    hasPTBR: boolean
+  }>>([])
+  const [selectedProvider, setSelectedProvider] = useState<string>("")
+  const [showProviders, setShowProviders] = useState(false)
 
   // Fetch anime data
   useEffect(() => {
@@ -109,23 +121,46 @@ export default function WatchPage() {
     }
   }, [animeId])
 
-  // Fetch stream URL
+  // Fetch stream URL with multiple providers
   useEffect(() => {
     const fetchStream = async () => {
       if (!anime) return
       
       setIsLoadingStream(true)
       try {
+        const type = selectedSub === "dub" ? "dub" : "sub"
+        const providerParam = selectedProvider ? `&provider=${selectedProvider}` : ""
         const res = await fetch(
-          `/api/addon/stream?title=${encodeURIComponent(anime.title)}&episode=${currentEpisode}`
+          `/api/addon/stream?title=${encodeURIComponent(anime.title)}&episode=${currentEpisode}&type=${type}&ptbr=true${providerParam}`
         )
         const data = await res.json()
         
         if (data.success && data.sources?.length > 0) {
-          const source = selectedSub === "dub" 
-            ? data.sources.find((s: { quality: string }) => s.quality === "DUB") || data.sources[0]
-            : data.sources[0]
-          setStreamUrl(source.url)
+          // Store all available sources
+          setAvailableSources(data.sources)
+          
+          // Find preferred source (PT-BR first if not already selected)
+          let selectedSource = data.sources[0]
+          if (!selectedProvider) {
+            // Prefer PT-BR provider
+            const ptbrSource = data.sources.find((s: { hasPTBR: boolean }) => s.hasPTBR)
+            if (ptbrSource) {
+              selectedSource = ptbrSource
+              setSelectedProvider(ptbrSource.providerId)
+            } else {
+              setSelectedProvider(data.sources[0].providerId)
+            }
+          } else {
+            // Use selected provider
+            const providerSource = data.sources.find(
+              (s: { providerId: string }) => s.providerId === selectedProvider
+            )
+            if (providerSource) {
+              selectedSource = providerSource
+            }
+          }
+          
+          setStreamUrl(selectedSource.url)
           
           // Save to watch history
           updateWatchHistory({
@@ -145,7 +180,18 @@ export default function WatchPage() {
     }
 
     fetchStream()
-  }, [anime, currentEpisode, selectedSub])
+  }, [anime, currentEpisode, selectedSub, selectedProvider])
+
+  // Close provider dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (showProviders && !(e.target as HTMLElement).closest('[data-provider-dropdown]')) {
+        setShowProviders(false)
+      }
+    }
+    document.addEventListener('click', handleClickOutside)
+    return () => document.removeEventListener('click', handleClickOutside)
+  }, [showProviders])
 
   const navigateEpisode = useCallback((direction: "prev" | "next") => {
     const newEpisode = direction === "next" ? currentEpisode + 1 : currentEpisode - 1
@@ -555,9 +601,80 @@ export default function WatchPage() {
                 </div>
 
                 <div className="flex items-center gap-3">
+                  {/* Provider Selector */}
+                  <div className="relative" data-provider-dropdown>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowProviders(!showProviders)}
+                      className="gap-2 bg-background/50"
+                    >
+                      <Server className="w-4 h-4" />
+                      <span className="hidden sm:inline">
+                        {availableSources.find(s => s.providerId === selectedProvider)?.providerName || "Servidor"}
+                      </span>
+                      {availableSources.find(s => s.providerId === selectedProvider)?.hasPTBR && (
+                        <Badge variant="secondary" className="text-[10px] px-1 py-0 bg-green-500/20 text-green-500">
+                          PT-BR
+                        </Badge>
+                      )}
+                    </Button>
+                    
+                    {/* Provider Dropdown */}
+                    {showProviders && (
+                      <div className="absolute top-full mt-2 right-0 z-50 w-72 max-h-80 overflow-y-auto rounded-lg border border-border bg-card shadow-xl">
+                        <div className="p-2 border-b border-border">
+                          <p className="text-xs font-medium text-muted-foreground">Selecionar Servidor</p>
+                        </div>
+                        <div className="p-1">
+                          {availableSources.map((source) => (
+                            <button
+                              key={source.providerId + source.quality}
+                              onClick={() => {
+                                setSelectedProvider(source.providerId)
+                                setStreamUrl(source.url)
+                                setShowProviders(false)
+                              }}
+                              className={cn(
+                                "w-full flex items-center justify-between px-3 py-2 rounded-md text-sm transition-colors",
+                                selectedProvider === source.providerId
+                                  ? "bg-primary/10 text-primary"
+                                  : "hover:bg-muted/50"
+                              )}
+                            >
+                              <div className="flex items-center gap-2">
+                                <Server className="w-4 h-4" />
+                                <span className="font-medium">{source.providerName}</span>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                {source.hasPTBR && (
+                                  <Badge variant="secondary" className="text-[10px] px-1 py-0 bg-green-500/20 text-green-500">
+                                    PT-BR
+                                  </Badge>
+                                )}
+                                <Badge variant="outline" className="text-[10px] px-1 py-0">
+                                  {source.quality}
+                                </Badge>
+                                {selectedProvider === source.providerId && (
+                                  <Check className="w-3 h-3 text-primary" />
+                                )}
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                        {availableSources.length === 0 && (
+                          <div className="p-4 text-center text-muted-foreground text-sm">
+                            Carregando servidores...
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
                   {/* SUB/DUB Selector */}
                   <Select value={selectedSub} onValueChange={setSelectedSub}>
                     <SelectTrigger className="w-28 bg-background/50">
+                      <Languages className="w-4 h-4 mr-2" />
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>

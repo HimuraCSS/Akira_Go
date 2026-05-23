@@ -13,6 +13,11 @@ import {
   type ConsumetEpisode,
   type ConsumetStreamSource,
 } from "@/lib/consumet-api"
+import { 
+  BR_ANIME_PROVIDERS, 
+  getPTBRProviders,
+  type AnimeProvider as BRProvider 
+} from "@/lib/br-anime-providers"
 
 // Types
 export interface StreamSource {
@@ -142,10 +147,32 @@ const defaultAddons: Addon[] = [
   { id: "zoro-1", name: "Zoro Provider", url: "https://zoro.to", status: "online", type: "scraper", providerId: "zoro" },
   { id: "nyaa-1", name: "Nyaa.si", url: "https://nyaa.si/", status: "online", type: "scraper", providerId: "nyaa" },
   { id: "nekobt-1", name: "NekoBT", url: "https://nekobt.to/search?group_id=7251504327481&media_id=s1392", status: "online", type: "scraper", providerId: "nekobt" },
+  // PT-BR Subtitle sources
+  { id: "opensubtitles-1", name: "OpenSubtitles PT-BR", url: "https://www.opensubtitles.org/pb", status: "online", type: "subtitle" },
+  { id: "animedb-1", name: "AnimeDB Fansubs", url: "https://animedb.org", status: "online", type: "subtitle" },
 ]
 
-// Default providers based on Consumet availability
+// Convert BR_ANIME_PROVIDERS to our Provider format
+const brProvidersToContext = (): Provider[] => {
+  return BR_ANIME_PROVIDERS
+    .filter(p => p.status !== "offline")
+    .slice(0, 15) // Limit to top 15 providers
+    .map(p => ({
+      id: p.id,
+      name: p.name,
+      status: p.status as Provider["status"],
+      enabled: p.priority <= 5, // Enable top 5 by default
+      latency: 50 + (p.priority * 10),
+      hasSubtitles: p.hasSub,
+      languages: p.languages,
+      isCustom: false,
+      url: p.embedPattern,
+    }))
+}
+
+// Default providers - combines Consumet and BR providers
 const defaultProviders: Provider[] = [
+  // Main Consumet providers
   { 
     id: "gogoanime", 
     name: PROVIDER_INFO.gogoanime.name, 
@@ -164,46 +191,8 @@ const defaultProviders: Provider[] = [
     hasSubtitles: true,
     languages: ["English", "Portuguese", "Spanish"],
   },
-  { 
-    id: "nyaa", 
-    name: "Nyaa.si", 
-    status: "online", 
-    enabled: true, 
-    latency: 80,
-    hasSubtitles: true,
-    languages: ["Japanese", "English", "Portuguese"],
-    isCustom: true,
-    url: "https://nyaa.si/",
-  },
-  { 
-    id: "nekobt", 
-    name: "NekoBT", 
-    status: "online", 
-    enabled: true, 
-    latency: 150,
-    hasSubtitles: true,
-    languages: ["Portuguese"],
-    isCustom: true,
-    url: "https://nekobt.to/search?group_id=7251504327481&media_id=s1392",
-  },
-  { 
-    id: "animefox", 
-    name: PROVIDER_INFO.animefox.name, 
-    status: PROVIDER_INFO.animefox.status, 
-    enabled: false, 
-    latency: 200,
-    hasSubtitles: false,
-    languages: ["English"],
-  },
-  { 
-    id: "animepahe", 
-    name: PROVIDER_INFO.animepahe.name, 
-    status: PROVIDER_INFO.animepahe.status, 
-    enabled: false, 
-    latency: 180,
-    hasSubtitles: false,
-    languages: ["English"],
-  },
+  // BR Providers with PT-BR support
+  ...brProvidersToContext(),
 ]
 
 const StreamingContext = createContext<StreamingContextType | null>(null)
