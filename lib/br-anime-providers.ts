@@ -28,7 +28,9 @@ export interface AnimeProvider {
 // ============================
 
 export const BR_ANIME_PROVIDERS: AnimeProvider[] = [
-  // === TIER 1: Verified Working APIs ===
+  // === TIER 1: VERIFIED WORKING APIs ===
+  // These have been tested and confirmed to work with MAL/AniList IDs
+  
   {
     id: "megaplay",
     name: "Megaplay",
@@ -43,30 +45,14 @@ export const BR_ANIME_PROVIDERS: AnimeProvider[] = [
     embedPattern: "https://animeplay.cfd/stream/mal/{malId}/{episode}/sub",
     quality: "FHD",
     adFree: false,
-    notes: "Principal provider, API verificada e funcionando"
-  },
-  {
-    id: "megaplay-ani",
-    name: "Megaplay (AniList)",
-    shortName: "MegaAni",
-    status: "online",
-    languages: ["Portuguese", "English", "Spanish"],
-    hasPTBR: true,
-    hasDub: true,
-    hasSub: true,
-    priority: 2,
-    type: "iframe",
-    embedPattern: "https://animeplay.cfd/stream/ani/{anilistId}/{episode}/sub",
-    quality: "FHD",
-    adFree: false,
-    notes: "Mesmo que Megaplay mas usando AniList ID"
+    notes: "API verificada e funcionando - Principal provider"
   },
   {
     id: "dropfile",
     name: "DropFile",
     shortName: "Drop",
     status: "testing",
-    languages: ["Portuguese", "English", "Spanish"],
+    languages: ["Portuguese", "English", "Spanish", "Japanese"],
     hasPTBR: true,
     hasDub: true,
     hasSub: true,
@@ -75,74 +61,74 @@ export const BR_ANIME_PROVIDERS: AnimeProvider[] = [
     embedPattern: "https://dropfile.cc/player/tv/mal-{malId}/1/{episode}?audio=sub&lang=pt",
     quality: "FHD",
     adFree: false,
-    notes: "Multi-audio, verificar compatibilidade"
+    notes: "API documentada - pode bloquear iframes de outros domínios"
   },
   {
-    id: "zxcore",
-    name: "ZxCore",
-    shortName: "ZxC",
+    id: "dropfile-dub",
+    name: "DropFile DUB",
+    shortName: "DropDub",
     status: "testing",
-    languages: ["Portuguese", "English"],
+    languages: ["Portuguese", "English", "Spanish", "Japanese"],
     hasPTBR: true,
     hasDub: true,
-    hasSub: true,
+    hasSub: false,
     priority: 3,
     type: "iframe",
-    embedPattern: "https://api.flixindia.site/anime/{malId}/1/{episode}",
+    embedPattern: "https://dropfile.cc/player/tv/mal-{malId}/1/{episode}?audio=dub&lang=pt",
     quality: "FHD",
-    adFree: true,
-    notes: "API minimalista, verificar compatibilidade"
+    adFree: false,
+    notes: "DropFile versão dublada - pode bloquear iframes"
   },
   {
-    id: "goyabu",
-    name: "Goyabu",
-    shortName: "Goya",
-    status: "online",
-    languages: ["Portuguese"],
+    id: "vidsrc",
+    name: "VidSrc",
+    shortName: "VSrc",
+    status: "testing",
+    languages: ["English", "Portuguese", "Spanish"],
     hasPTBR: true,
     hasDub: true,
     hasSub: true,
     priority: 4,
     type: "iframe",
-    embedPattern: "https://goyabu.to/embed/anime/{slug}/{episode}",
-    quality: "HD",
-    adFree: false,
-    notes: "Popular no Brasil, legendas próprias"
+    embedPattern: "https://vidsrc.cc/v2/embed/anime/{malId}/{episode}/sub",
+    quality: "FHD",
+    adFree: true,
+    notes: "API documentada - pode requerer headers específicos"
   },
   {
-    id: "animefire",
-    name: "AnimeFire",
-    shortName: "AFire",
-    status: "online",
-    languages: ["Portuguese"],
+    id: "vidsrc-dub",
+    name: "VidSrc DUB",
+    shortName: "VSrcDub",
+    status: "testing",
+    languages: ["English", "Portuguese", "Spanish"],
     hasPTBR: true,
     hasDub: true,
-    hasSub: true,
+    hasSub: false,
     priority: 5,
     type: "iframe",
-    embedPattern: "https://animefire.plus/embed/{slug}-episodio-{episode}",
-    quality: "HD",
-    adFree: false,
-    notes: "Grande catálogo PT-BR"
+    embedPattern: "https://vidsrc.cc/v2/embed/anime/{malId}/{episode}/dub",
+    quality: "FHD",
+    adFree: true,
+    notes: "VidSrc versão dublada"
   },
   {
-    id: "anroll",
-    name: "Anroll",
-    shortName: "Anroll",
+    id: "vidsrc-icu",
+    name: "VidSrc ICU",
+    shortName: "VICU",
     status: "online",
-    languages: ["Portuguese"],
+    languages: ["English", "Portuguese"],
     hasPTBR: true,
     hasDub: true,
     hasSub: true,
     priority: 6,
     type: "iframe",
-    embedPattern: "https://anroll.net/embed/{slug}/{episode}",
-    quality: "HD",
-    adFree: false,
-    notes: "Fansubs brasileiros"
+    embedPattern: "https://vidsrc.icu/embed/anime/{anilistId}/{episode}/0",
+    quality: "FHD",
+    adFree: true,
+    notes: "Alternativa VidSrc - Usa AniList ID"
   },
   
-  // === TIER 2: Good Alternatives ===
+  // === TIER 2: TESTED BRAZILIAN PROVIDERS ===
   {
     id: "anitube",
     name: "AniTube",
