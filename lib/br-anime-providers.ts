@@ -28,15 +28,15 @@ export interface AnimeProvider {
 // ============================
 
 export const BR_ANIME_PROVIDERS: AnimeProvider[] = [
-  // === TIER 1: VERIFIED WORKING APIs ===
-  // These have been tested and confirmed to work with MAL/AniList IDs
+  // === TIER 1: VERIFIED WORKING APIs (Tested 2026-05-24) ===
+  // These have been tested and confirmed to work with iframes
   
   {
-    id: "megaplay",
-    name: "Megaplay",
+    id: "megaplay-mal",
+    name: "Megaplay (MAL)",
     shortName: "Mega",
     status: "online",
-    languages: ["Portuguese", "English", "Spanish"],
+    languages: ["Portuguese", "English", "Spanish", "Japanese"],
     hasPTBR: true,
     hasDub: true,
     hasSub: true,
@@ -45,90 +45,58 @@ export const BR_ANIME_PROVIDERS: AnimeProvider[] = [
     embedPattern: "https://animeplay.cfd/stream/mal/{malId}/{episode}/sub",
     quality: "FHD",
     adFree: false,
-    notes: "API verificada e funcionando - Principal provider"
+    notes: "VERIFIED - Principal provider, Skip Intro disponível"
   },
   {
-    id: "dropfile",
-    name: "DropFile",
-    shortName: "Drop",
-    status: "testing",
-    languages: ["Portuguese", "English", "Spanish", "Japanese"],
+    id: "megaplay-mal-dub",
+    name: "Megaplay DUB (MAL)",
+    shortName: "MegaDub",
+    status: "online",
+    languages: ["Portuguese", "English", "Spanish"],
     hasPTBR: true,
     hasDub: true,
-    hasSub: true,
+    hasSub: false,
     priority: 2,
     type: "iframe",
-    embedPattern: "https://dropfile.cc/player/tv/mal-{malId}/1/{episode}?audio=sub&lang=pt",
+    embedPattern: "https://animeplay.cfd/stream/mal/{malId}/{episode}/dub",
     quality: "FHD",
     adFree: false,
-    notes: "API documentada - pode bloquear iframes de outros domínios"
+    notes: "VERIFIED - Versão dublada, Skip Intro disponível"
   },
   {
-    id: "dropfile-dub",
-    name: "DropFile DUB",
-    shortName: "DropDub",
-    status: "testing",
+    id: "megaplay-ani",
+    name: "Megaplay (AniList)",
+    shortName: "MegaAni",
+    status: "online",
     languages: ["Portuguese", "English", "Spanish", "Japanese"],
     hasPTBR: true,
     hasDub: true,
-    hasSub: false,
+    hasSub: true,
     priority: 3,
     type: "iframe",
-    embedPattern: "https://dropfile.cc/player/tv/mal-{malId}/1/{episode}?audio=dub&lang=pt",
+    embedPattern: "https://animeplay.cfd/stream/ani/{anilistId}/{episode}/sub",
     quality: "FHD",
     adFree: false,
-    notes: "DropFile versão dublada - pode bloquear iframes"
+    notes: "VERIFIED - Usa AniList ID, backup do MAL"
   },
   {
-    id: "vidsrc",
-    name: "VidSrc",
-    shortName: "VSrc",
-    status: "testing",
-    languages: ["English", "Portuguese", "Spanish"],
-    hasPTBR: true,
-    hasDub: true,
-    hasSub: true,
-    priority: 4,
-    type: "iframe",
-    embedPattern: "https://vidsrc.cc/v2/embed/anime/{malId}/{episode}/sub",
-    quality: "FHD",
-    adFree: true,
-    notes: "API documentada - pode requerer headers específicos"
-  },
-  {
-    id: "vidsrc-dub",
-    name: "VidSrc DUB",
-    shortName: "VSrcDub",
-    status: "testing",
-    languages: ["English", "Portuguese", "Spanish"],
+    id: "megaplay-ani-dub",
+    name: "Megaplay DUB (AniList)",
+    shortName: "MegaAniDub",
+    status: "online",
+    languages: ["Portuguese", "English", "Spanish"],
     hasPTBR: true,
     hasDub: true,
     hasSub: false,
-    priority: 5,
+    priority: 4,
     type: "iframe",
-    embedPattern: "https://vidsrc.cc/v2/embed/anime/{malId}/{episode}/dub",
+    embedPattern: "https://animeplay.cfd/stream/ani/{anilistId}/{episode}/dub",
     quality: "FHD",
-    adFree: true,
-    notes: "VidSrc versão dublada"
-  },
-  {
-    id: "vidsrc-icu",
-    name: "VidSrc ICU",
-    shortName: "VICU",
-    status: "online",
-    languages: ["English", "Portuguese"],
-    hasPTBR: true,
-    hasDub: true,
-    hasSub: true,
-    priority: 6,
-    type: "iframe",
-    embedPattern: "https://vidsrc.icu/embed/anime/{anilistId}/{episode}/0",
-    quality: "FHD",
-    adFree: true,
-    notes: "Alternativa VidSrc - Usa AniList ID"
+    adFree: false,
+    notes: "VERIFIED - Usa AniList ID, versão dublada"
   },
   
-  // === TIER 2: TESTED BRAZILIAN PROVIDERS ===
+  // === TIER 2: APIs DOCUMENTADAS (podem ter CF ou bloqueio) ===
   {
     id: "anitube",
     name: "AniTube",
