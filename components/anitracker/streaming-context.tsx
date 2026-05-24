@@ -58,15 +58,11 @@ export interface Addon {
 }
 
 export interface Provider {
-  id: string
+  id: ConsumetProvider
   name: string
-  status: "online" | "offline" | "degraded" | "testing"
+  status: "online" | "offline" | "degraded"
   enabled: boolean
   latency?: number
-  hasSubtitles?: boolean
-  languages?: string[]
-  isCustom?: boolean
-  url?: string
 }
 
 export interface Episode {
@@ -118,10 +114,6 @@ interface StreamingState {
   intro?: { start: number; end: number }
   outro?: { start: number; end: number }
   streamHeaders?: Record<string, string>
-  
-  // Subtitles
-  subtitles: Array<{ url: string; lang: string; label: string }>
-  activeSubtitle: string | null
 }
 
 interface StreamingContextType extends StreamingState {
@@ -147,9 +139,6 @@ interface StreamingContextType extends StreamingState {
   setIsBuffering: (buffering: boolean) => void
   setHlsReady: (ready: boolean) => void
   clearError: () => void
-  
-  // Subtitle actions
-  setActiveSubtitle: (subtitleId: string | null) => void
 }
 
 // Default addons
@@ -404,20 +393,15 @@ export function StreamingProvider({ children }: { children: ReactNode }) {
     }))
 
     try {
-      // Get consumet-compatible provider or fall back to gogoanime
-      const consumetProvider = ["gogoanime", "zoro", "animefox", "animepahe", "9anime", "crunchyroll"].includes(state.activeProvider as string)
-        ? (state.activeProvider as ConsumetProvider)
-        : "gogoanime"
-        
       // Search for the anime in Consumet
-      const consumetAnime = await findAnimeInConsumet(animeTitle, consumetProvider)
+      const consumetAnime = await findAnimeInConsumet(animeTitle, state.activeProvider)
       
       if (!consumetAnime) {
         throw new Error(`Anime "${animeTitle}" não encontrado no provedor`)
       }
 
       // Get full anime info with episodes
-      const animeInfo = await getAnimeInfo(consumetAnime.id, consumetProvider)
+      const animeInfo = await getAnimeInfo(consumetAnime.id, state.activeProvider)
       
       if (!animeInfo || !animeInfo.episodes || animeInfo.episodes.length === 0) {
         throw new Error("Nenhum episódio encontrado para este anime")
@@ -474,22 +458,17 @@ export function StreamingProvider({ children }: { children: ReactNode }) {
     }))
 
     try {
-      // Get consumet-compatible provider or fall back to gogoanime
-      const consumetProvider = ["gogoanime", "zoro", "animefox", "animepahe", "9anime", "crunchyroll"].includes(state.activeProvider as string)
-        ? (state.activeProvider as ConsumetProvider)
-        : "gogoanime"
-        
       // If we don't have the consumet episode ID, we need to load the anime first
       let consumetEpisodeId = episode.consumetEpisodeId
 
       if (!consumetEpisodeId) {
         // Search and get episode ID
-        const consumetAnime = await findAnimeInConsumet(episode.animeTitle, consumetProvider)
+        const consumetAnime = await findAnimeInConsumet(episode.animeTitle, state.activeProvider)
         if (!consumetAnime) {
           throw new Error("Anime não encontrado no provedor")
         }
 
-        const animeInfo = await getAnimeInfo(consumetAnime.id, consumetProvider)
+        const animeInfo = await getAnimeInfo(consumetAnime.id, state.activeProvider)
         if (!animeInfo?.episodes) {
           throw new Error("Episódios não encontrados")
         }
@@ -505,7 +484,7 @@ export function StreamingProvider({ children }: { children: ReactNode }) {
       // Get streaming sources - pass anime title for better search
       const streamInfo = await getStreamingSources(
         consumetEpisodeId, 
-        consumetProvider,
+        state.activeProvider,
         "gogocdn",
         episode.animeTitle
       )
