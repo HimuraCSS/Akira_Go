@@ -28,16 +28,23 @@ export interface AnimeProvider {
 // ============================
 
 export const BR_ANIME_PROVIDERS: AnimeProvider[] = [
-  // === TIER 1: VERIFIED WORKING APIs (Tested 2026-05-24) ===
-  // These have been tested and confirmed to work with iframes
+  // ============================================================
+  // TIER 1: VERIFIED WORKING IFRAMES (Tested 2026-05-24)
+  // ============================================================
+  // O Megaplay (animeplay.cfd) funciona porque:
+  // 1. Não tem header X-Frame-Options bloqueante
+  // 2. Não usa Cloudflare agressivo
+  // 3. Permite embed de qualquer domínio
+  // 4. URL simples com MAL/AniList ID
+  // NOTA: Legendas são HARDSUB (queimadas no vídeo em inglês)
   
   {
     id: "megaplay-mal",
-    name: "Megaplay (MAL)",
+    name: "Megaplay",
     shortName: "Mega",
     status: "online",
-    languages: ["Portuguese", "English", "Spanish", "Japanese"],
-    hasPTBR: true,
+    languages: ["English"],
+    hasPTBR: false, // Legendas são hardsub em inglês
     hasDub: true,
     hasSub: true,
     priority: 1,
@@ -45,15 +52,15 @@ export const BR_ANIME_PROVIDERS: AnimeProvider[] = [
     embedPattern: "https://animeplay.cfd/stream/mal/{malId}/{episode}/sub",
     quality: "FHD",
     adFree: false,
-    notes: "VERIFIED - Principal provider, Skip Intro disponível"
+    notes: "VERIFIED - Legendas EN hardsub, Skip Intro, vasto catálogo"
   },
   {
     id: "megaplay-mal-dub",
-    name: "Megaplay DUB (MAL)",
+    name: "Megaplay DUB",
     shortName: "MegaDub",
     status: "online",
-    languages: ["Portuguese", "English", "Spanish"],
-    hasPTBR: true,
+    languages: ["English"],
+    hasPTBR: false,
     hasDub: true,
     hasSub: false,
     priority: 2,
@@ -61,15 +68,15 @@ export const BR_ANIME_PROVIDERS: AnimeProvider[] = [
     embedPattern: "https://animeplay.cfd/stream/mal/{malId}/{episode}/dub",
     quality: "FHD",
     adFree: false,
-    notes: "VERIFIED - Versão dublada, Skip Intro disponível"
+    notes: "VERIFIED - Áudio dublado EN, Skip Intro"
   },
   {
     id: "megaplay-ani",
     name: "Megaplay (AniList)",
     shortName: "MegaAni",
     status: "online",
-    languages: ["Portuguese", "English", "Spanish", "Japanese"],
-    hasPTBR: true,
+    languages: ["English"],
+    hasPTBR: false,
     hasDub: true,
     hasSub: true,
     priority: 3,
@@ -77,15 +84,15 @@ export const BR_ANIME_PROVIDERS: AnimeProvider[] = [
     embedPattern: "https://animeplay.cfd/stream/ani/{anilistId}/{episode}/sub",
     quality: "FHD",
     adFree: false,
-    notes: "VERIFIED - Usa AniList ID, backup do MAL"
+    notes: "VERIFIED - Alternativa com AniList ID"
   },
   {
     id: "megaplay-ani-dub",
     name: "Megaplay DUB (AniList)",
     shortName: "MegaAniDub",
     status: "online",
-    languages: ["Portuguese", "English", "Spanish"],
-    hasPTBR: true,
+    languages: ["English"],
+    hasPTBR: false,
     hasDub: true,
     hasSub: false,
     priority: 4,
@@ -93,10 +100,14 @@ export const BR_ANIME_PROVIDERS: AnimeProvider[] = [
     embedPattern: "https://animeplay.cfd/stream/ani/{anilistId}/{episode}/dub",
     quality: "FHD",
     adFree: false,
-    notes: "VERIFIED - Usa AniList ID, versão dublada"
+    notes: "VERIFIED - Áudio dublado EN com AniList ID"
   },
   
-  // === TIER 2: APIs DOCUMENTADAS (podem ter CF ou bloqueio) ===
+  // ============================================================
+  // TIER 2: SITES BRASILEIROS (requerem slug, não MAL ID)
+  // ============================================================
+  // Estes providers têm legendas PT-BR mas precisam de slug
+  // ao invés de MAL ID, então são mais difíceis de integrar
   {
     id: "anitube",
     name: "AniTube",
