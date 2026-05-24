@@ -90,6 +90,7 @@ export default function WatchPage() {
     providerId: string
     providerName: string
     hasPTBR: boolean
+    hasDub: boolean
   }>>([])
   const [selectedProvider, setSelectedProvider] = useState<string>("")
   const [showProviders, setShowProviders] = useState(false)
@@ -127,40 +128,65 @@ export default function WatchPage() {
       if (!anime) return
       
       setIsLoadingStream(true)
+      setStreamUrl(null) // Clear current stream while loading
+      
       try {
         const type = selectedSub === "dub" ? "dub" : "sub"
-        const providerParam = selectedProvider ? `&provider=${selectedProvider}` : ""
         const res = await fetch(
-          `/api/addon/stream?title=${encodeURIComponent(anime.title)}&episode=${currentEpisode}&type=${type}&ptbr=true${providerParam}`
+          `/api/addon/stream?title=${encodeURIComponent(anime.title)}&episode=${currentEpisode}&type=${type}&ptbr=true`
         )
         const data = await res.json()
         
         if (data.success && data.sources?.length > 0) {
-          // Store all available sources
-          setAvailableSources(data.sources)
+          // Filter sources based on sub/dub selection
+          let filteredSources = data.sources
+          if (selectedSub === "dub") {
+            // For dub, only show providers that support dub
+            filteredSources = data.sources.filter((s: { hasDub: boolean }) => s.hasDub)
+          }
           
-          // Find preferred source (PT-BR first if not already selected)
-          let selectedSource = data.sources[0]
-          if (!selectedProvider) {
-            // Prefer PT-BR provider
-            const ptbrSource = data.sources.find((s: { hasPTBR: boolean }) => s.hasPTBR)
-            if (ptbrSource) {
-              selectedSource = ptbrSource
-              setSelectedProvider(ptbrSource.providerId)
-            } else {
-              setSelectedProvider(data.sources[0].providerId)
-            }
-          } else {
-            // Use selected provider
-            const providerSource = data.sources.find(
+          // If no sources for dub, show all sources with a note
+          if (filteredSources.length === 0) {
+            filteredSources = data.sources
+          }
+          
+          // Store all available sources
+          setAvailableSources(filteredSources)
+          
+          // Find preferred source (PT-BR first)
+          let selectedSource = filteredSources[0]
+          
+          // Check if previously selected provider is still available
+          if (selectedProvider) {
+            const providerSource = filteredSources.find(
               (s: { providerId: string }) => s.providerId === selectedProvider
             )
             if (providerSource) {
               selectedSource = providerSource
+            } else {
+              // Provider not available for this type, select best PT-BR
+              const ptbrSource = filteredSources.find((s: { hasPTBR: boolean }) => s.hasPTBR)
+              if (ptbrSource) {
+                selectedSource = ptbrSource
+                setSelectedProvider(ptbrSource.providerId)
+              } else if (filteredSources[0]) {
+                setSelectedProvider(filteredSources[0].providerId)
+              }
+            }
+          } else {
+            // No provider selected, prefer PT-BR
+            const ptbrSource = filteredSources.find((s: { hasPTBR: boolean }) => s.hasPTBR)
+            if (ptbrSource) {
+              selectedSource = ptbrSource
+              setSelectedProvider(ptbrSource.providerId)
+            } else if (filteredSources[0]) {
+              setSelectedProvider(filteredSources[0].providerId)
             }
           }
           
-          setStreamUrl(selectedSource.url)
+          if (selectedSource) {
+            setStreamUrl(selectedSource.url)
+          }
           
           // Save to watch history
           updateWatchHistory({
@@ -171,16 +197,19 @@ export default function WatchPage() {
             totalEpisodes: anime.episodes || 12,
             progress: Math.round((currentEpisode / (anime.episodes || 12)) * 100),
           })
+        } else {
+          setAvailableSources([])
         }
       } catch (error) {
         console.error("Failed to fetch stream:", error)
+        setAvailableSources([])
       } finally {
         setIsLoadingStream(false)
       }
     }
 
     fetchStream()
-  }, [anime, currentEpisode, selectedSub, selectedProvider])
+  }, [anime, currentEpisode, selectedSub]) // Removed selectedProvider from deps to avoid re-fetch loop
 
   // Close provider dropdown when clicking outside
   useEffect(() => {
@@ -192,6 +221,19 @@ export default function WatchPage() {
     document.addEventListener('click', handleClickOutside)
     return () => document.removeEventListener('click', handleClickOutside)
   }, [showProviders])
+
+  // Handle provider change
+  const handleProviderChange = useCallback((providerId: string, url: string) => {
+    setSelectedProvider(providerId)
+    setStreamUrl(url)
+    setShowProviders(false)
+  }, [])
+
+  // Handle sub/dub change - reset provider selection
+  const handleSubDubChange = useCallback((value: string) => {
+    setSelectedSub(value)
+    // Don't reset provider - let the useEffect handle finding best source
+  }, [])
 
   const navigateEpisode = useCallback((direction: "prev" | "next") => {
     const newEpisode = direction === "next" ? currentEpisode + 1 : currentEpisode - 1
@@ -608,6 +650,7 @@ export default function WatchPage() {
                       size="sm"
                       onClick={() => setShowProviders(!showProviders)}
                       className="gap-2 bg-background/50"
+                      disabled={isLoadingStream}
                     >
                       <Server className="w-4 h-4" />
                       <span className="hidden sm:inline">
@@ -622,58 +665,70 @@ export default function WatchPage() {
                     
                     {/* Provider Dropdown */}
                     {showProviders && (
-                      <div className="absolute top-full mt-2 right-0 z-50 w-72 max-h-80 overflow-y-auto rounded-lg border border-border bg-card shadow-xl">
-                        <div className="p-2 border-b border-border">
-                          <p className="text-xs font-medium text-muted-foreground">Selecionar Servidor</p>
+                      <div className="absolute top-full mt-2 right-0 z-50 w-80 max-h-96 overflow-y-auto rounded-lg border border-border bg-card shadow-xl">
+                        <div className="p-3 border-b border-border bg-muted/30">
+                          <p className="text-sm font-semibold">Selecionar Servidor</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {availableSources.length} servidor(es) disponível(is)
+                          </p>
                         </div>
                         <div className="p-1">
-                          {availableSources.map((source) => (
-                            <button
-                              key={source.providerId + source.quality}
-                              onClick={() => {
-                                setSelectedProvider(source.providerId)
-                                setStreamUrl(source.url)
-                                setShowProviders(false)
-                              }}
-                              className={cn(
-                                "w-full flex items-center justify-between px-3 py-2 rounded-md text-sm transition-colors",
-                                selectedProvider === source.providerId
-                                  ? "bg-primary/10 text-primary"
-                                  : "hover:bg-muted/50"
-                              )}
-                            >
-                              <div className="flex items-center gap-2">
-                                <Server className="w-4 h-4" />
-                                <span className="font-medium">{source.providerName}</span>
-                              </div>
-                              <div className="flex items-center gap-1.5">
-                                {source.hasPTBR && (
-                                  <Badge variant="secondary" className="text-[10px] px-1 py-0 bg-green-500/20 text-green-500">
-                                    PT-BR
+                          {availableSources.length > 0 ? (
+                            availableSources.map((source, index) => (
+                              <button
+                                key={`${source.providerId}-${index}`}
+                                onClick={() => handleProviderChange(source.providerId, source.url)}
+                                className={cn(
+                                  "w-full flex items-center justify-between px-3 py-2.5 rounded-md text-sm transition-colors",
+                                  selectedProvider === source.providerId
+                                    ? "bg-primary/10 text-primary border border-primary/30"
+                                    : "hover:bg-muted/50"
+                                )}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <Server className="w-4 h-4 shrink-0" />
+                                  <span className="font-medium">{source.providerName}</span>
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                  {source.hasPTBR && (
+                                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0 bg-green-500/20 text-green-500 border-green-500/30">
+                                      PT-BR
+                                    </Badge>
+                                  )}
+                                  {source.hasDub && selectedSub === "dub" && (
+                                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0 bg-blue-500/20 text-blue-500 border-blue-500/30">
+                                      DUB
+                                    </Badge>
+                                  )}
+                                  <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                                    {source.quality}
                                   </Badge>
-                                )}
-                                <Badge variant="outline" className="text-[10px] px-1 py-0">
-                                  {source.quality}
-                                </Badge>
-                                {selectedProvider === source.providerId && (
-                                  <Check className="w-3 h-3 text-primary" />
-                                )}
-                              </div>
-                            </button>
-                          ))}
+                                  {selectedProvider === source.providerId && (
+                                    <Check className="w-4 h-4 text-primary" />
+                                  )}
+                                </div>
+                              </button>
+                            ))
+                          ) : (
+                            <div className="p-4 text-center text-muted-foreground text-sm">
+                              {isLoadingStream ? (
+                                <div className="flex items-center justify-center gap-2">
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                  Carregando servidores...
+                                </div>
+                              ) : (
+                                "Nenhum servidor disponível"
+                              )}
+                            </div>
+                          )}
                         </div>
-                        {availableSources.length === 0 && (
-                          <div className="p-4 text-center text-muted-foreground text-sm">
-                            Carregando servidores...
-                          </div>
-                        )}
                       </div>
                     )}
                   </div>
 
                   {/* SUB/DUB Selector */}
-                  <Select value={selectedSub} onValueChange={setSelectedSub}>
-                    <SelectTrigger className="w-28 bg-background/50">
+                  <Select value={selectedSub} onValueChange={handleSubDubChange}>
+                    <SelectTrigger className="w-32 bg-background/50">
                       <Languages className="w-4 h-4 mr-2" />
                       <SelectValue />
                     </SelectTrigger>
