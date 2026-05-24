@@ -58,11 +58,15 @@ export interface Addon {
 }
 
 export interface Provider {
-  id: ConsumetProvider
+  id: string
   name: string
-  status: "online" | "offline" | "degraded"
+  status: "online" | "offline" | "degraded" | "testing"
   enabled: boolean
   latency?: number
+  hasSubtitles?: boolean
+  languages?: string[]
+  isCustom?: boolean
+  url?: string
 }
 
 export interface Episode {
@@ -87,7 +91,7 @@ export interface AnimePlaylist {
 
 interface StreamingState {
   // Active provider for scraping
-  activeProvider: ConsumetProvider | string
+  activeProvider: string
   providers: Provider[]
   addons: Addon[]
   
@@ -114,12 +118,16 @@ interface StreamingState {
   intro?: { start: number; end: number }
   outro?: { start: number; end: number }
   streamHeaders?: Record<string, string>
+  
+  // Subtitles
+  subtitles: Array<{ url: string; lang: string; label: string }>
+  activeSubtitle: string | null
 }
 
 interface StreamingContextType extends StreamingState {
   // Provider actions
-  setActiveProvider: (providerId: ConsumetProvider | string) => void
-  toggleProvider: (providerId: ConsumetProvider | string, enabled: boolean) => void
+  setActiveProvider: (providerId: string) => void
+  toggleProvider: (providerId: string, enabled: boolean) => void
   
   // Addon actions
   addAddon: (url: string, type?: Addon["type"]) => Promise<void>
@@ -139,6 +147,9 @@ interface StreamingContextType extends StreamingState {
   setIsBuffering: (buffering: boolean) => void
   setHlsReady: (ready: boolean) => void
   clearError: () => void
+  
+  // Subtitle actions
+  setActiveSubtitle: (subtitle: string | null) => void
 }
 
 // Default addons
@@ -220,7 +231,7 @@ export function StreamingProvider({ children }: { children: ReactNode }) {
     streamHeaders: undefined,
   })
 
-  const setActiveProvider = useCallback((providerId: ConsumetProvider | string) => {
+  const setActiveProvider = useCallback((providerId: string) => {
     setState(prev => {
       const provider = prev.providers.find(p => p.id === providerId)
       if (!provider || !provider.enabled || provider.status === "offline") {
@@ -230,7 +241,7 @@ export function StreamingProvider({ children }: { children: ReactNode }) {
     })
   }, [])
 
-  const toggleProvider = useCallback((providerId: ConsumetProvider | string, enabled: boolean) => {
+  const toggleProvider = useCallback((providerId: string, enabled: boolean) => {
     setState(prev => ({
       ...prev,
       providers: prev.providers.map(p => 
@@ -608,7 +619,7 @@ export function StreamingProvider({ children }: { children: ReactNode }) {
     setState(prev => ({ ...prev, error: null }))
   }, [])
 
-  const setActiveSubtitle = useCallback((subtitle: Subtitle | null) => {
+  const setActiveSubtitle = useCallback((subtitle: string | null) => {
     setState(prev => ({ ...prev, activeSubtitle: subtitle }))
   }, [])
 

@@ -56,8 +56,13 @@ export interface ConsumetStreamInfo {
   provider?: string
 }
 
-// Available providers
-export type ConsumetProvider = "gogoanime" | "zoro" | "animefox" | "animepahe"
+// Available providers (core providers + extensible via string)
+export type ConsumetProvider = "gogoanime" | "zoro" | "animefox" | "animepahe" | (string & {})
+
+// Helper to validate if provider is a core Consumet provider
+export function isCoreProvider(provider: string): provider is "gogoanime" | "zoro" | "animefox" | "animepahe" {
+  return ["gogoanime", "zoro", "animefox", "animepahe"].includes(provider)
+}
 
 // Demo/fallback streams for when API fails (public domain test streams)
 const DEMO_STREAMS: ConsumetStreamSource[] = [
