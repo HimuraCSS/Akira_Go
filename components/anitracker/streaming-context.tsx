@@ -108,8 +108,8 @@ interface StreamingState {
   streamHeaders?: Record<string, string>
   
   // Subtitles
-  subtitles: Array<{ url: string; lang: string; label: string }>
-  activeSubtitle: string | null
+  subtitles: Subtitle[]
+  activeSubtitle: Subtitle | null
 }
 
 interface StreamingContextType extends StreamingState {
@@ -137,7 +137,7 @@ interface StreamingContextType extends StreamingState {
   clearError: () => void
   
   // Subtitle actions
-  setActiveSubtitle: (subtitle: string | null) => void
+  setActiveSubtitle: (subtitle: Subtitle | null) => void
 }
 
 // Default addons
@@ -607,7 +607,7 @@ export function StreamingProvider({ children }: { children: ReactNode }) {
     setState(prev => ({ ...prev, error: null }))
   }, [])
 
-  const setActiveSubtitle = useCallback((subtitle: string | null) => {
+  const setActiveSubtitle = useCallback((subtitle: Subtitle | null) => {
     setState(prev => ({ ...prev, activeSubtitle: subtitle }))
   }, [])
 
