@@ -37,13 +37,13 @@ export interface Subtitle {
 }
 
 export interface Provider {
-  id: ConsumetProvider | string
+  id: string
   name: string
   status: "online" | "offline" | "degraded" | "testing"
   enabled: boolean
   latency?: number
-  hasSubtitles: boolean
-  languages: string[]
+  hasSubtitles?: boolean
+  languages?: string[]
   isCustom?: boolean
   url?: string
 }
@@ -55,18 +55,6 @@ export interface Addon {
   status: "testing" | "online" | "offline"
   type: "scraper" | "tracker" | "subtitle"
   providerId?: string
-}
-
-export interface Provider {
-  id: string
-  name: string
-  status: "online" | "offline" | "degraded" | "testing"
-  enabled: boolean
-  latency?: number
-  hasSubtitles?: boolean
-  languages?: string[]
-  isCustom?: boolean
-  url?: string
 }
 
 export interface Episode {
