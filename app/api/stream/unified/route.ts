@@ -14,10 +14,8 @@ import {
   generateProviderUrl,
   type Provider 
 } from "@/lib/anime-slug-mapper"
-import {
-  searchByMalId as searchAllManga,
-  getEpisodeStreams as getAllMangaStreams,
-} from "@/lib/allmanga-api"
+// AllManga disabled - requires proxy for CORS headers
+// import { searchByMalId as searchAllManga, getEpisodeStreams as getAllMangaStreams } from "@/lib/allmanga-api"
 
 // Supabase client for server-side without cookies
 const supabase = createClient(
@@ -286,35 +284,13 @@ export async function GET(request: Request) {
       response.sources.push(...iframeSources)
     }
     
-    // 2. Get direct MP4 streams from AllManga CDN (1080p, no cookies!)
-    // Based on: https://github.com/walterwhite-69/AllManga.to-API
-    if (title) {
-      try {
-        const allMangaAnime = await searchAllManga(malId || 0, title)
-        
-        if (allMangaAnime) {
-          const streams = await getAllMangaStreams(allMangaAnime._id, episode)
-          
-          for (const stream of streams) {
-            response.sources.push({
-              id: `allmanga-${stream.translationType}-${stream.quality}`,
-              name: `AllManga ${stream.quality} ${stream.translationType.toUpperCase()}`,
-              quality: stream.quality,
-              url: stream.url,
-              isM3U8: false,
-              type: "mp4", // Direct MP4!
-              provider: "allmanga-cdn",
-              hasSubtitles: false,
-              subtitleLanguages: [],
-              headers: stream.headers,
-              sizeMB: stream.sizeMB,
-            })
-          }
-        }
-      } catch (error) {
-        console.error("[UnifiedStream] AllManga error:", error)
-      }
-    }
+    // 2. AllManga CDN disabled - requires Referer/Origin headers that can't be set
+    // in HTML5 video element due to CORS. Would need a proxy server to work.
+    // Keeping the code commented for future reference:
+    // if (title) {
+    //   const allMangaAnime = await searchAllManga(malId || 0, title)
+    //   if (allMangaAnime) { ... }
+    // }
     
     // 3. Get HLS sources from HiAnime scraper (when available)
     // Note: Most public M3U8 APIs (Consumet, Anify, Miruro) are now offline

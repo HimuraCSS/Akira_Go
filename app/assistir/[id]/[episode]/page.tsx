@@ -603,25 +603,47 @@ export default function WatchPage() {
             {/* Video Player */}
             <div className="relative aspect-video bg-black/50 backdrop-blur-sm">
               {streamUrl ? (
-                // Detect if current source is HLS (m3u8) or iframe
-                streamUrl.includes(".m3u8") || availableSources.find(s => s.providerId === selectedProvider)?.type === "hls" ? (
-                  // HLS Player
-                  <HLSPlayer
-                    key={streamUrl}
-                    src={streamUrl}
-                    autoplay={autoplay}
-                    className="absolute inset-0 w-full h-full"
-                  />
-                ) : (
-                  // iframe Player
-                  <iframe
-                    key={streamUrl}
-                    src={streamUrl}
-                    className="absolute inset-0 w-full h-full"
-                    allowFullScreen
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
-                  />
-                )
+                // Detect source type: HLS (m3u8), MP4 (direct), or iframe
+                (() => {
+                  const currentSource = availableSources.find(s => s.providerId === selectedProvider)
+                  const isHLS = streamUrl.includes(".m3u8") || currentSource?.type === "hls"
+                  const isMP4 = streamUrl.includes(".mp4") || currentSource?.type === "mp4"
+                  
+                  if (isHLS) {
+                    // HLS Player
+                    return (
+                      <HLSPlayer
+                        key={streamUrl}
+                        src={streamUrl}
+                        autoplay={autoplay}
+                        className="absolute inset-0 w-full h-full"
+                      />
+                    )
+                  } else if (isMP4) {
+                    // Native HTML5 Video Player for MP4
+                    return (
+                      <video
+                        key={streamUrl}
+                        src={streamUrl}
+                        className="absolute inset-0 w-full h-full"
+                        controls
+                        autoPlay={autoplay}
+                        playsInline
+                      />
+                    )
+                  } else {
+                    // iframe Player
+                    return (
+                      <iframe
+                        key={streamUrl}
+                        src={streamUrl}
+                        className="absolute inset-0 w-full h-full"
+                        allowFullScreen
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
+                      />
+                    )
+                  }
+                })()
               ) : (
                 <div className="absolute inset-0 flex items-center justify-center">
                   <Loader2 className="w-10 h-10 animate-spin text-primary" />
