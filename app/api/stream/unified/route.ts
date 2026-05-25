@@ -280,9 +280,8 @@ export async function GET(request: Request) {
       response.sources.push(...iframeSources)
     }
     
-    // 2. Get HLS sources from HiAnime scraper (requires search, but has PT-BR subs)
-    // Note: Many public M3U8 APIs (Consumet, Anify) are now offline/rate-limited
-    // The HiAnime scraper is our backup for HLS streams when available
+    // 2. Get HLS sources from HiAnime scraper (when available)
+    // Note: Most public M3U8 APIs (Consumet, Anify, Miruro) are now offline
     if (title) {
       const hiAnimeInfo = await getHiAnimeEpisodeInfo(title, episode)
       
