@@ -280,7 +280,9 @@ export async function GET(request: Request) {
       response.sources.push(...iframeSources)
     }
     
-    // 2. Get HLS sources with subtitles (requires search, but has PT-BR subs)
+    // 2. Get HLS sources from HiAnime scraper (requires search, but has PT-BR subs)
+    // Note: Many public M3U8 APIs (Consumet, Anify) are now offline/rate-limited
+    // The HiAnime scraper is our backup for HLS streams when available
     if (title) {
       const hiAnimeInfo = await getHiAnimeEpisodeInfo(title, episode)
       
@@ -294,7 +296,7 @@ export async function GET(request: Request) {
       }
     }
     
-    // 4. Sort subtitles - PT-BR first
+    // 3. Sort subtitles - PT-BR first
     response.subtitles.sort((a, b) => {
       if (a.isPTBR && !b.isPTBR) return -1
       if (!a.isPTBR && b.isPTBR) return 1
