@@ -14,6 +14,7 @@ import {
   generateProviderUrl,
   type Provider 
 } from "@/lib/anime-slug-mapper"
+import { extractStream, getProxyUrl } from "@/lib/stream-extractor"
 
 // Supabase client for server-side without cookies
 const supabase = createClient(
@@ -274,13 +275,50 @@ export async function GET(request: Request) {
       subtitles: [],
     }
     
-    // 1. Get iframe sources (fast, always available)
+    // 1. Get iframe sources (Megaplay - fast and reliable)
     if (malId) {
       const iframeSources = getIframeSources(malId, anilistId, episode, slug)
       response.sources.push(...iframeSources)
     }
     
-    // 2. Get HLS sources with subtitles (requires search, but has PT-BR subs)
+    // 2. Try to extract HLS streams (experimental, may fail)
+    // Note: Most free APIs are unreliable, so this is optional
+    if (malId && !preferIframe) {
+      try {
+        const extracted = await extractStream(malId, episode, title)
+        
+        if (extracted.success && extracted.streams.length > 0) {
+          for (const stream of extracted.streams) {
+            response.sources.push({
+              id: `extracted-${stream.provider}-${stream.quality}`,
+              name: `${stream.provider?.toUpperCase() || "HLS"} ${stream.quality}`,
+              quality: stream.quality,
+              url: stream.referer ? getProxyUrl(stream.url, stream.referer) : stream.url,
+              isM3U8: stream.type === "hls",
+              type: stream.type,
+              provider: stream.provider || "direct",
+              hasSubtitles: extracted.subtitles.length > 0,
+              subtitleLanguages: extracted.subtitles.map(s => s.lang),
+            })
+          }
+          
+          // Add extracted subtitles
+          for (const sub of extracted.subtitles) {
+            response.subtitles.push({
+              url: `/api/stream/proxy?url=${encodeURIComponent(sub.url)}&type=vtt`,
+              lang: sub.lang,
+              label: sub.label,
+              isPTBR: sub.lang === "pt-BR" || /portugu/i.test(sub.label),
+            })
+          }
+        }
+      } catch (error) {
+        console.error("[Unified] HLS extraction failed:", error)
+        // Continue with iframe sources
+      }
+    }
+    
+    // 3. Get HLS sources with subtitles from HiAnime (requires search)
     if (title) {
       const hiAnimeInfo = await getHiAnimeEpisodeInfo(title, episode)
       
