@@ -144,7 +144,52 @@ export const BR_ANIME_PROVIDERS: AnimeProvider[] = [
   },
   
   // ============================================================
-  // TIER 1.3: UNIQUESTREAM - OFFLINE (Requer ID interno)
+  // TIER 1.3: ANIMETSU - CLEAN HLS PLAYER (Via iframe)
+  // ============================================================
+  // Animetsu.live tem player HLS proprio com:
+  // - Skip Intro/Outro
+  // - Soft subs multilingual
+  // - Dub toggle
+  // - Server selector (pahe, kite, fsoft)
+  // - 1163+ episodios One Piece
+  // Usa AniList ID diretamente
+  // Descoberto via EverythingMoe 2026-05-25
+  
+  {
+    id: "animetsu-sub",
+    name: "Animetsu SUB",
+    shortName: "ATsu",
+    status: "online",
+    languages: ["English", "Japanese", "Portuguese", "Spanish", "French", "German"],
+    hasPTBR: true, // Soft subs incluindo PT
+    hasDub: false,
+    hasSub: true,
+    priority: 3, // High priority - clean player
+    type: "iframe",
+    embedPattern: "https://animetsu.live/watch/{anilistId}/{episode}?source=sub",
+    quality: "FHD",
+    adFree: false,
+    notes: "VERIFIED - HLS player, Skip Intro, Soft subs, Dub toggle, Server selector"
+  },
+  {
+    id: "animetsu-dub",
+    name: "Animetsu DUB",
+    shortName: "ATsuDub",
+    status: "online",
+    languages: ["English"],
+    hasPTBR: false,
+    hasDub: true,
+    hasSub: false,
+    priority: 4, // High priority - clean player
+    type: "iframe",
+    embedPattern: "https://animetsu.live/watch/{anilistId}/{episode}?source=dub",
+    quality: "FHD",
+    adFree: false,
+    notes: "VERIFIED - Dublado EN, HLS player nativo"
+  },
+  
+  // ============================================================
+  // TIER 1.4: UNIQUESTREAM - OFFLINE (Requer ID interno)
   // ============================================================
   // UniqueStream nao funciona como iframe pois:
   // 1. Usa ID interno proprio (nao MAL/AniList)
