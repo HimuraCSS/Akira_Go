@@ -104,115 +104,11 @@ export const BR_ANIME_PROVIDERS: AnimeProvider[] = [
   },
   
   // ============================================================
-  // TIER 1.2: VIDNEST - MULTI-LANGUAGE EMBED (Tested 2026-05-25)
+  // TIER 1.2: VIDNEST - OFFLINE (Ads + Fetch errors)
   // ============================================================
-  // VidNest funciona perfeitamente com iframes
-  // Suporta sub/dub e vários idiomas de áudio
-  // Usa MAL ID direto (descoberto via HiAnime watch page)
-  
-  {
-    id: "vidnest-sub",
-    name: "VidNest SUB",
-    shortName: "VNest",
-    status: "online",
-    languages: ["English", "Japanese"],
-    hasPTBR: false, // Legendas EN
-    hasDub: false,
-    hasSub: true,
-    priority: 5,
-    type: "iframe",
-    embedPattern: "https://vidnest.fun/anime/{malId}/{episode}/sub",
-    quality: "FHD",
-    adFree: true,
-    notes: "VERIFIED - Player limpo, Skip 10s, legendas EN softsub"
-  },
-  {
-    id: "vidnest-dub",
-    name: "VidNest DUB",
-    shortName: "VNestDub",
-    status: "online",
-    languages: ["English"],
-    hasPTBR: false,
-    hasDub: true,
-    hasSub: false,
-    priority: 6,
-    type: "iframe",
-    embedPattern: "https://vidnest.fun/anime/{malId}/{episode}/dub",
-    quality: "FHD",
-    adFree: true,
-    notes: "VERIFIED - Áudio EN dublado, player limpo"
-  },
-  {
-    id: "vidnest-animepahe-sub",
-    name: "VidNest AnimePahe SUB",
-    shortName: "VNPahe",
-    status: "online",
-    languages: ["English", "Japanese"],
-    hasPTBR: false,
-    hasDub: false,
-    hasSub: true,
-    priority: 7,
-    type: "iframe",
-    embedPattern: "https://vidnest.fun/animepahe/{malId}/{episode}/sub",
-    quality: "FHD",
-    adFree: true,
-    notes: "VERIFIED - AnimePahe source, legendas EN"
-  },
-  {
-    id: "vidnest-animepahe-dub",
-    name: "VidNest AnimePahe DUB",
-    shortName: "VNPaheDub",
-    status: "online",
-    languages: ["English"],
-    hasPTBR: false,
-    hasDub: true,
-    hasSub: false,
-    priority: 8,
-    type: "iframe",
-    embedPattern: "https://vidnest.fun/animepahe/{malId}/{episode}/dub",
-    quality: "FHD",
-    adFree: true,
-    notes: "VERIFIED - AnimePahe source, áudio EN"
-  },
-  
-  // ============================================================
-  // TIER 1.3: TRYEMBED - DIRECT MAL ID (Tested 2026-05-25)
-  // ============================================================
-  // TryEmbed usa MAL ID direto, sem necessidade de slug
-  // Descoberto via HiAnime watch page
-  
-  {
-    id: "tryembed-sub",
-    name: "TryEmbed SUB",
-    shortName: "TryE",
-    status: "online",
-    languages: ["English", "Japanese"],
-    hasPTBR: false,
-    hasDub: false,
-    hasSub: true,
-    priority: 9,
-    type: "iframe",
-    embedPattern: "https://tryembed.us.cc/embed/anime/{malId}/{episode}/sub",
-    quality: "FHD",
-    adFree: true,
-    notes: "VERIFIED - MAL ID direto, legendas EN"
-  },
-  {
-    id: "tryembed-dub",
-    name: "TryEmbed DUB",
-    shortName: "TryEDub",
-    status: "online",
-    languages: ["English"],
-    hasPTBR: false,
-    hasDub: true,
-    hasSub: false,
-    priority: 10,
-    type: "iframe",
-    embedPattern: "https://tryembed.us.cc/embed/anime/{malId}/{episode}/dub",
-    quality: "FHD",
-    adFree: true,
-    notes: "VERIFIED - MAL ID direto, áudio EN"
-  },
+  // VidNest e TryEmbed removidos - apresentam ads intrusivos e
+  // erros "Failed to fetch" na maioria dos casos.
+  // Descoberto via testes 2026-05-25
   
   // ============================================================
   // TIER 1.4: UNIQUESTREAM - MULTI-DUB (12+ idiomas de áudio!)
@@ -624,6 +520,16 @@ export function generateEmbedUrl(
   const provider = getProvider(providerId)
   if (!provider || !provider.embedPattern) return null
   
+  // Check if provider requires slug but none provided
+  const requiresSlug = provider.embedPattern.includes("{slug}")
+  const requiresMalId = provider.embedPattern.includes("{malId}")
+  const requiresAnilistId = provider.embedPattern.includes("{anilistId}")
+  
+  // Only generate URL if we have the required parameters
+  if (requiresSlug && !params.slug && !params.title) return null
+  if (requiresMalId && !params.malId) return null
+  if (requiresAnilistId && !params.anilistId && !params.malId) return null
+  
   // Generate slug from title if not provided
   const slug = params.slug || (params.title 
     ? params.title.toLowerCase()
@@ -633,7 +539,7 @@ export function generateEmbedUrl(
   
   let url = provider.embedPattern
     .replace("{malId}", params.malId?.toString() || "")
-    .replace("{anilistId}", params.anilistId?.toString() || "")
+    .replace("{anilistId}", (params.anilistId || params.malId)?.toString() || "")
     .replace("{title}", encodeURIComponent(params.title || ""))
     .replace("{slug}", slug)
     .replace("{episode}", params.episode.toString())

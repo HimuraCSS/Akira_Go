@@ -112,7 +112,7 @@ async function getSlugMappings(malId: number): Promise<Map<string, string>> {
   return slugMap
 }
 
-// Get sources from slug-based providers (UniqueStream, ReAnime, etc.)
+// Get sources from slug-based providers (UniqueStream only - ReAnime has Cloudflare)
 function getSlugBasedSources(
   malId: number,
   episode: number,
@@ -122,7 +122,7 @@ function getSlugBasedSources(
 ): UnifiedSource[] {
   const sources: UnifiedSource[] = []
   
-  // Providers that use slugs instead of MAL ID
+  // Only UniqueStream works reliably - ReAnime has Cloudflare protection
   const slugProviders: Array<{
     id: string
     name: string
@@ -143,26 +143,7 @@ function getSlugBasedSources(
       quality: "FHD",
       notes: "12+ idiomas de audio incluindo PT-BR!"
     },
-    {
-      id: "reanime-sub",
-      name: "ReAnime SUB",
-      provider: "reanime",
-      languages: ["English", "Japanese"],
-      hasPTBR: false,
-      type: "sub",
-      quality: "FHD",
-      notes: "Interface limpa, 1080p HD"
-    },
-    {
-      id: "reanime-dub",
-      name: "ReAnime DUB",
-      provider: "reanime",
-      languages: ["English"],
-      hasPTBR: false,
-      type: "dub",
-      quality: "FHD",
-      notes: "Audio EN dublado"
-    },
+    // ReAnime removed - Cloudflare protected, shows "Failed to fetch" errors
   ]
   
   for (const providerInfo of slugProviders) {
