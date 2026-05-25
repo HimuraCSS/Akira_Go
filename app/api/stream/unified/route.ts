@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { createClient } from "@supabase/supabase-js"
 import { 
   searchAnime as searchHiAnime, 
   getEpisodes, 
@@ -8,6 +9,17 @@ import {
   type Server,
 } from "@/lib/hianime/scraper"
 import { BR_ANIME_PROVIDERS, generateEmbedUrl } from "@/lib/br-anime-providers"
+import { 
+  titleToSlug, 
+  generateProviderUrl,
+  type Provider 
+} from "@/lib/anime-slug-mapper"
+
+// Supabase client for server-side without cookies
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
 
 // Types
 interface UnifiedSource {
@@ -71,6 +83,130 @@ function getIframeSources(
         provider: provider.id,
         hasSubtitles: provider.hasSub,
         subtitleLanguages: provider.languages,
+      })
+    }
+  }
+  
+  return sources
+}
+
+// Fetch slug mappings from database
+async function getSlugMappings(malId: number): Promise<Map<string, string>> {
+  const slugMap = new Map<string, string>()
+  
+  try {
+    const { data, error } = await supabase
+      .from("anime_slug_mappings")
+      .select("provider, slug")
+      .eq("mal_id", malId)
+    
+    if (!error && data) {
+      for (const mapping of data) {
+        slugMap.set(mapping.provider, mapping.slug)
+      }
+    }
+  } catch (e) {
+    console.error("[UnifiedStream] Error fetching slug mappings:", e)
+  }
+  
+  return slugMap
+}
+
+// Get sources from slug-based providers (UniqueStream, ReAnime, etc.)
+function getSlugBasedSources(
+  malId: number,
+  episode: number,
+  title: string,
+  titleEnglish: string | undefined,
+  slugMappings: Map<string, string>
+): UnifiedSource[] {
+  const sources: UnifiedSource[] = []
+  
+  // Providers that use slugs instead of MAL ID
+  const slugProviders: Array<{
+    id: string
+    name: string
+    provider: Provider
+    languages: string[]
+    hasPTBR: boolean
+    type: 'sub' | 'dub'
+    quality: string
+    notes: string
+  }> = [
+    {
+      id: "uniquestream-sub",
+      name: "UniqueStream Multi-Dub",
+      provider: "uniquestream",
+      languages: ["Portuguese", "English", "Spanish", "German", "French", "Italian", "Hindi", "Arabic", "Japanese"],
+      hasPTBR: true,
+      type: "sub",
+      quality: "FHD",
+      notes: "12+ idiomas de audio incluindo PT-BR!"
+    },
+    {
+      id: "reanime-sub",
+      name: "ReAnime SUB",
+      provider: "reanime",
+      languages: ["English", "Japanese"],
+      hasPTBR: false,
+      type: "sub",
+      quality: "FHD",
+      notes: "Interface limpa, 1080p HD"
+    },
+    {
+      id: "reanime-dub",
+      name: "ReAnime DUB",
+      provider: "reanime",
+      languages: ["English"],
+      hasPTBR: false,
+      type: "dub",
+      quality: "FHD",
+      notes: "Audio EN dublado"
+    },
+  ]
+  
+  for (const providerInfo of slugProviders) {
+    // Get slug from database or generate from title
+    let slug = slugMappings.get(providerInfo.provider)
+    
+    if (!slug) {
+      // Generate slug from title
+      slug = titleToSlug(titleEnglish || title)
+      
+      // Save generated slug to database (async, don't wait)
+      supabase
+        .from("anime_slug_mappings")
+        .upsert({
+          mal_id: malId,
+          title: title,
+          title_english: titleEnglish || null,
+          provider: providerInfo.provider,
+          slug: slug,
+          verified: false,
+        }, { onConflict: "mal_id,provider" })
+        .then(() => {})
+        .catch((e) => console.error("Error saving slug:", e))
+    }
+    
+    // Generate URL
+    const url = generateProviderUrl(
+      providerInfo.provider,
+      slug,
+      episode,
+      providerInfo.type
+    )
+    
+    if (url) {
+      sources.push({
+        id: `slug-${providerInfo.id}`,
+        name: providerInfo.name,
+        quality: providerInfo.quality,
+        url,
+        isM3U8: false,
+        type: "iframe", // These are external embeds
+        provider: providerInfo.provider,
+        hasSubtitles: true,
+        subtitleLanguages: providerInfo.languages,
       })
     }
   }
@@ -223,7 +359,9 @@ export async function GET(request: Request) {
     ? parseInt(searchParams.get("anilistId")!) 
     : undefined
   const slug = searchParams.get("slug") || undefined
+  const titleEnglish = searchParams.get("titleEnglish") || undefined
   const preferIframe = searchParams.get("preferIframe") === "true"
+  const includeSlugProviders = searchParams.get("includeSlugProviders") !== "false" // Default true
   
   if (!malId && !title) {
     return NextResponse.json(
@@ -238,13 +376,23 @@ export async function GET(request: Request) {
       subtitles: [],
     }
     
+    // Fetch slug mappings from database in parallel with other operations
+    const slugMappingsPromise = malId ? getSlugMappings(malId) : Promise.resolve(new Map<string, string>())
+    
     // 1. Get iframe sources (fast, always available)
     if (malId) {
       const iframeSources = getIframeSources(malId, anilistId, episode, slug)
       response.sources.push(...iframeSources)
     }
     
-    // 2. Get HLS sources with subtitles (requires search, but has PT-BR subs)
+    // 2. Get slug-based provider sources (UniqueStream, ReAnime, etc.)
+    if (malId && title && includeSlugProviders) {
+      const slugMappings = await slugMappingsPromise
+      const slugSources = getSlugBasedSources(malId, episode, title, titleEnglish, slugMappings)
+      response.sources.push(...slugSources)
+    }
+    
+    // 3. Get HLS sources with subtitles (requires search, but has PT-BR subs)
     if (title) {
       const hiAnimeInfo = await getHiAnimeEpisodeInfo(title, episode)
       
@@ -258,14 +406,14 @@ export async function GET(request: Request) {
       }
     }
     
-    // 3. Sort subtitles - PT-BR first
+    // 4. Sort subtitles - PT-BR first
     response.subtitles.sort((a, b) => {
       if (a.isPTBR && !b.isPTBR) return -1
       if (!a.isPTBR && b.isPTBR) return 1
       return a.lang.localeCompare(b.lang)
     })
     
-    // 4. Determine recommended source
+    // 5. Determine recommended source
     if (response.sources.length > 0) {
       if (preferIframe) {
         // Prefer iframe (Megaplay)
