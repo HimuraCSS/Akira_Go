@@ -104,37 +104,53 @@ export const BR_ANIME_PROVIDERS: AnimeProvider[] = [
   },
   
   // ============================================================
-  // TIER 1.2: VIDNEST - OFFLINE (Ads + Fetch errors)
+  // TIER 1.2: MEGAPLAY S-2 (Anikoto/HiAnime Episode ID)
   // ============================================================
-  // VidNest e TryEmbed removidos - apresentam ads intrusivos e
-  // erros "Failed to fetch" na maioria dos casos.
-  // Descoberto via testes 2026-05-25
-  
-  // ============================================================
-  // TIER 1.4: UNIQUESTREAM - MULTI-DUB (12+ idiomas de áudio!)
-  // ============================================================
-  // ============================================================
-  // UniqueStream tem áudio dublado em MUITOS idiomas:
-  // Japanese, Arabic, Portuguese (Brazil), Spanish (Spain), German,
-  // Tamil, English, Spanish (Latin America), Hindi, Telugu, Italian, French
-  // Requer slug do anime, não MAL ID direto
+  // Usa ID de episodio do Anikoto/HiAnime
+  // Formato: /stream/s-2/{aniwatch-ep-id}/{language}
+  // Requer mapeamento de episodio
   
   {
-    id: "uniquestream",
-    name: "UniqueStream",
-    shortName: "UStream",
+    id: "megaplay-s2-sub",
+    name: "MegaPlay HiAnime",
+    shortName: "MPHi",
     status: "online",
-    languages: ["Portuguese", "English", "Spanish", "German", "French", "Italian", "Hindi", "Arabic", "Japanese"],
-    hasPTBR: true, // TEM ÁUDIO DUBLADO PT-BR!
-    hasDub: true,
+    languages: ["English", "Japanese"],
+    hasPTBR: false,
+    hasDub: false,
     hasSub: true,
-    priority: 7,
-    type: "scraper", // Precisa de slug, não ID direto
-    embedPattern: "https://anime.uniquestream.net/watch/{slug}",
+    priority: 5,
+    type: "iframe",
+    embedPattern: "https://animeplay.cfd/stream/s-2/{hianimeEpId}/sub",
     quality: "FHD",
     adFree: false,
-    notes: "MULTI-DUB - 12+ idiomas de áudio incluindo PT-BR! Requer slug"
+    notes: "VERIFIED - Usa ID de episodio HiAnime/Anikoto"
   },
+  {
+    id: "megaplay-s2-dub",
+    name: "MegaPlay HiAnime DUB",
+    shortName: "MPHiDub",
+    status: "online",
+    languages: ["English"],
+    hasPTBR: false,
+    hasDub: true,
+    hasSub: false,
+    priority: 6,
+    type: "iframe",
+    embedPattern: "https://animeplay.cfd/stream/s-2/{hianimeEpId}/dub",
+    quality: "FHD",
+    adFree: false,
+    notes: "VERIFIED - Dublado EN via HiAnime/Anikoto"
+  },
+  
+  // ============================================================
+  // TIER 1.3: UNIQUESTREAM - OFFLINE (Requer ID interno)
+  // ============================================================
+  // UniqueStream nao funciona como iframe pois:
+  // 1. Usa ID interno proprio (nao MAL/AniList)
+  // 2. Busca do site nao funciona
+  // 3. Sem API publica para mapeamento
+  // Descoberto via testes 2026-05-25
   
   // ============================================================
   // TIER 1.4: REANIME - CLEAN INTERFACE (Cloudflare protected)
@@ -177,43 +193,43 @@ export const BR_ANIME_PROVIDERS: AnimeProvider[] = [
   },
   
   // ============================================================
-  // TIER 1.5: HLS PROVIDERS COM LEGENDAS MULTILÍNGUES (CC/Softsub)
+  // TIER 1.5: HLS PROVIDERS - OFFLINE (HiAnime descontinuado)
   // ============================================================
-  // Estes providers retornam streams HLS (M3U8) com legendas VTT separadas
-  // Suportam múltiplos idiomas incluindo PT-BR
-  // Requerem player HLS.js customizado
+  // HiAnime foi descontinuado em 2026-05-25
+  // Mensagem: "It's time to say goodbye. Thank you for a wonderful journey"
+  // Mantido aqui para referencia historica
   
   {
     id: "hianime-sub",
     name: "HiAnime SUB",
     shortName: "HiSub",
-    status: "online",
+    status: "offline", // DESCONTINUADO
     languages: ["Portuguese", "English", "Spanish", "Japanese", "French", "German", "Italian", "Arabic"],
-    hasPTBR: true, // Legendas CC multilíngues incluindo PT-BR
+    hasPTBR: true,
     hasDub: false,
     hasSub: true,
-    priority: 5,
+    priority: 50, // Baixa prioridade - offline
     type: "scraper",
     embedPattern: "hianime://{animeSlug}/{episode}/sub",
     quality: "FHD",
     adFree: true,
-    notes: "HLS + VTT - Legendas multilíngues CC (Softsub), Skip Intro/Outro"
+    notes: "OFFLINE - HiAnime descontinuado em 2026-05-25"
   },
   {
     id: "hianime-dub",
     name: "HiAnime DUB",
     shortName: "HiDub",
-    status: "online",
+    status: "offline", // DESCONTINUADO
     languages: ["English", "Portuguese"],
-    hasPTBR: false, // DUB geralmente só EN
+    hasPTBR: false,
     hasDub: true,
     hasSub: false,
-    priority: 6,
+    priority: 51,
     type: "scraper",
     embedPattern: "hianime://{animeSlug}/{episode}/dub",
     quality: "FHD",
     adFree: true,
-    notes: "HLS - Áudio dublado EN, Skip Intro/Outro"
+    notes: "OFFLINE - HiAnime descontinuado em 2026-05-25"
   },
   
   // ============================================================
@@ -520,15 +536,18 @@ export function generateEmbedUrl(
   const provider = getProvider(providerId)
   if (!provider || !provider.embedPattern) return null
   
-  // Check if provider requires slug but none provided
+  // Check if provider requires specific parameters
   const requiresSlug = provider.embedPattern.includes("{slug}")
   const requiresMalId = provider.embedPattern.includes("{malId}")
   const requiresAnilistId = provider.embedPattern.includes("{anilistId}")
+  const requiresHianimeEpId = provider.embedPattern.includes("{hianimeEpId}")
   
-  // Only generate URL if we have the required parameters
+  // Skip providers that require parameters we don't have
   if (requiresSlug && !params.slug && !params.title) return null
   if (requiresMalId && !params.malId) return null
   if (requiresAnilistId && !params.anilistId && !params.malId) return null
+  // hianimeEpId requires special mapping - skip if not available
+  if (requiresHianimeEpId) return null // TODO: Implement HiAnime episode ID mapping
   
   // Generate slug from title if not provided
   const slug = params.slug || (params.title 
