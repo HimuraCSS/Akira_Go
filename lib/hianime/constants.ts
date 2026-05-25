@@ -1,6 +1,14 @@
 // HiAnime API Constants
-export const HIANIME_BASE_URL = "https://hianimez.to"
+// Primary domain - updated for 2026
+export const HIANIME_BASE_URL = "https://hianime.ms"
 export const HIANIME_AJAX_URL = `${HIANIME_BASE_URL}/ajax`
+
+// Fallback domains if primary fails
+export const HIANIME_FALLBACK_DOMAINS = [
+  "https://hianimez.to",
+  "https://hianime.sx",
+  "https://hianime.nz",
+]
 
 export const USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
 

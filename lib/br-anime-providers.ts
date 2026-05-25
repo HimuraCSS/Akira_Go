@@ -104,6 +104,46 @@ export const BR_ANIME_PROVIDERS: AnimeProvider[] = [
   },
   
   // ============================================================
+  // TIER 1.5: HLS PROVIDERS COM LEGENDAS MULTILÍNGUES (CC/Softsub)
+  // ============================================================
+  // Estes providers retornam streams HLS (M3U8) com legendas VTT separadas
+  // Suportam múltiplos idiomas incluindo PT-BR
+  // Requerem player HLS.js customizado
+  
+  {
+    id: "hianime-sub",
+    name: "HiAnime SUB",
+    shortName: "HiSub",
+    status: "online",
+    languages: ["Portuguese", "English", "Spanish", "Japanese", "French", "German", "Italian", "Arabic"],
+    hasPTBR: true, // Legendas CC multilíngues incluindo PT-BR
+    hasDub: false,
+    hasSub: true,
+    priority: 5,
+    type: "scraper",
+    embedPattern: "hianime://{animeSlug}/{episode}/sub",
+    quality: "FHD",
+    adFree: true,
+    notes: "HLS + VTT - Legendas multilíngues CC (Softsub), Skip Intro/Outro"
+  },
+  {
+    id: "hianime-dub",
+    name: "HiAnime DUB",
+    shortName: "HiDub",
+    status: "online",
+    languages: ["English", "Portuguese"],
+    hasPTBR: false, // DUB geralmente só EN
+    hasDub: true,
+    hasSub: false,
+    priority: 6,
+    type: "scraper",
+    embedPattern: "hianime://{animeSlug}/{episode}/dub",
+    quality: "FHD",
+    adFree: true,
+    notes: "HLS - Áudio dublado EN, Skip Intro/Outro"
+  },
+  
+  // ============================================================
   // TIER 2: SITES BRASILEIROS (requerem slug, não MAL ID)
   // ============================================================
   // Estes providers têm legendas PT-BR mas precisam de slug
