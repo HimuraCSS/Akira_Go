@@ -14,6 +14,10 @@ import {
   generateProviderUrl,
   type Provider 
 } from "@/lib/anime-slug-mapper"
+import {
+  searchByMalId as searchAllManga,
+  getEpisodeStreams as getAllMangaStreams,
+} from "@/lib/allmanga-api"
 
 // Supabase client for server-side without cookies
 const supabase = createClient(
@@ -32,6 +36,8 @@ interface UnifiedSource {
   provider: string
   hasSubtitles: boolean
   subtitleLanguages?: string[]
+  headers?: Record<string, string>
+  sizeMB?: number
 }
 
 interface UnifiedSubtitle {
@@ -280,7 +286,37 @@ export async function GET(request: Request) {
       response.sources.push(...iframeSources)
     }
     
-    // 2. Get HLS sources from HiAnime scraper (when available)
+    // 2. Get direct MP4 streams from AllManga CDN (1080p, no cookies!)
+    // Based on: https://github.com/walterwhite-69/AllManga.to-API
+    if (title) {
+      try {
+        const allMangaAnime = await searchAllManga(malId || 0, title)
+        
+        if (allMangaAnime) {
+          const streams = await getAllMangaStreams(allMangaAnime._id, episode)
+          
+          for (const stream of streams) {
+            response.sources.push({
+              id: `allmanga-${stream.translationType}-${stream.quality}`,
+              name: `AllManga ${stream.quality} ${stream.translationType.toUpperCase()}`,
+              quality: stream.quality,
+              url: stream.url,
+              isM3U8: false,
+              type: "mp4", // Direct MP4!
+              provider: "allmanga-cdn",
+              hasSubtitles: false,
+              subtitleLanguages: [],
+              headers: stream.headers,
+              sizeMB: stream.sizeMB,
+            })
+          }
+        }
+      } catch (error) {
+        console.error("[UnifiedStream] AllManga error:", error)
+      }
+    }
+    
+    // 3. Get HLS sources from HiAnime scraper (when available)
     // Note: Most public M3U8 APIs (Consumet, Anify, Miruro) are now offline
     if (title) {
       const hiAnimeInfo = await getHiAnimeEpisodeInfo(title, episode)
@@ -295,7 +331,7 @@ export async function GET(request: Request) {
       }
     }
     
-    // 3. Sort subtitles - PT-BR first
+    // 4. Sort subtitles - PT-BR first
     response.subtitles.sort((a, b) => {
       if (a.isPTBR && !b.isPTBR) return -1
       if (!a.isPTBR && b.isPTBR) return 1
