@@ -108,7 +108,7 @@ export const BR_ANIME_PROVIDERS: AnimeProvider[] = [
   // ============================================================
   // VidNest funciona perfeitamente com iframes
   // Suporta sub/dub e vários idiomas de áudio
-  // Usa AniList ID (que é igual ao MAL ID para maioria dos animes)
+  // Usa MAL ID direto (descoberto via HiAnime watch page)
   
   {
     id: "vidnest-sub",
@@ -142,9 +142,81 @@ export const BR_ANIME_PROVIDERS: AnimeProvider[] = [
     adFree: true,
     notes: "VERIFIED - Áudio EN dublado, player limpo"
   },
+  {
+    id: "vidnest-animepahe-sub",
+    name: "VidNest AnimePahe SUB",
+    shortName: "VNPahe",
+    status: "online",
+    languages: ["English", "Japanese"],
+    hasPTBR: false,
+    hasDub: false,
+    hasSub: true,
+    priority: 7,
+    type: "iframe",
+    embedPattern: "https://vidnest.fun/animepahe/{malId}/{episode}/sub",
+    quality: "FHD",
+    adFree: true,
+    notes: "VERIFIED - AnimePahe source, legendas EN"
+  },
+  {
+    id: "vidnest-animepahe-dub",
+    name: "VidNest AnimePahe DUB",
+    shortName: "VNPaheDub",
+    status: "online",
+    languages: ["English"],
+    hasPTBR: false,
+    hasDub: true,
+    hasSub: false,
+    priority: 8,
+    type: "iframe",
+    embedPattern: "https://vidnest.fun/animepahe/{malId}/{episode}/dub",
+    quality: "FHD",
+    adFree: true,
+    notes: "VERIFIED - AnimePahe source, áudio EN"
+  },
   
   // ============================================================
-  // TIER 1.3: UNIQUESTREAM - MULTI-DUB (12+ idiomas de áudio!)
+  // TIER 1.3: TRYEMBED - DIRECT MAL ID (Tested 2026-05-25)
+  // ============================================================
+  // TryEmbed usa MAL ID direto, sem necessidade de slug
+  // Descoberto via HiAnime watch page
+  
+  {
+    id: "tryembed-sub",
+    name: "TryEmbed SUB",
+    shortName: "TryE",
+    status: "online",
+    languages: ["English", "Japanese"],
+    hasPTBR: false,
+    hasDub: false,
+    hasSub: true,
+    priority: 9,
+    type: "iframe",
+    embedPattern: "https://tryembed.us.cc/embed/anime/{malId}/{episode}/sub",
+    quality: "FHD",
+    adFree: true,
+    notes: "VERIFIED - MAL ID direto, legendas EN"
+  },
+  {
+    id: "tryembed-dub",
+    name: "TryEmbed DUB",
+    shortName: "TryEDub",
+    status: "online",
+    languages: ["English"],
+    hasPTBR: false,
+    hasDub: true,
+    hasSub: false,
+    priority: 10,
+    type: "iframe",
+    embedPattern: "https://tryembed.us.cc/embed/anime/{malId}/{episode}/dub",
+    quality: "FHD",
+    adFree: true,
+    notes: "VERIFIED - MAL ID direto, áudio EN"
+  },
+  
+  // ============================================================
+  // TIER 1.4: UNIQUESTREAM - MULTI-DUB (12+ idiomas de áudio!)
+  // ============================================================
   // ============================================================
   // UniqueStream tem áudio dublado em MUITOS idiomas:
   // Japanese, Arabic, Portuguese (Brazil), Spanish (Spain), German,

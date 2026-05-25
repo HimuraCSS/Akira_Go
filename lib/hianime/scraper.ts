@@ -129,16 +129,12 @@ export async function getAnimeInfo(animeId: string): Promise<AnimeInfo | null> {
   // HiAnime now uses /details/ prefix for anime pages
   const url = `${HIANIME_BASE_URL}/details/${animeId}`
   
-  console.log("[v0] Fetching anime info from:", url)
   const res = await fetch(url, { headers: DEFAULT_HEADERS })
-  console.log("[v0] Response status:", res.status)
   const html = await res.text()
-  console.log("[v0] HTML length:", html.length)
   const $ = cheerio.load(html)
   
   // Updated selector: h1.film-name or .anisc-detail .film-name
   const name = $("h1.film-name").text().trim() || $(".anisc-detail .film-name").text().trim()
-  console.log("[v0] Found name:", name)
   if (!name) return null
   
   const jname = $(".anisc-detail .film-name").attr("data-jname") || ""
