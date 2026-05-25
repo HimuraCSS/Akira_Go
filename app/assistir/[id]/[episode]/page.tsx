@@ -140,8 +140,9 @@ export default function WatchPage() {
         const params = new URLSearchParams({
           malId: anime.mal_id.toString(),
           title: anime.title,
+          titleEnglish: anime.title || "",
           episode: currentEpisode.toString(),
-          preferIframe: "true" // Default to iframe for stability
+          preferIframe: "false" // Prefer HLS over iframe for native player
         })
         
         const res = await fetch(`/api/stream/unified?${params}`)
@@ -202,18 +203,30 @@ export default function WatchPage() {
               }
             }
           } else {
-            // No provider selected, prefer Megaplay (working) then PT-BR iframe
+            // No provider selected - Priority: HLS > PT-BR iframe > Megaplay iframe
+            // 1. First try HLS sources (native player, no external sites)
+            const hlsSource = filteredSources.find(
+              (s: { type: string }) => s.type === "hls"
+            )
+            // 2. Then try PT-BR HLS
+            const ptbrHlsSource = filteredSources.find(
+              (s: { hasPTBR: boolean; type: string }) => s.hasPTBR && s.type === "hls"
+            )
+            // 3. Then Megaplay iframe (fallback)
             const megaplaySource = filteredSources.find(
               (s: { providerId: string; type: string }) => s.providerId.includes("megaplay") && s.type === "iframe"
             )
+            // 4. PT-BR iframe
             const ptbrIframeSource = filteredSources.find(
               (s: { hasPTBR: boolean; type: string }) => s.hasPTBR && s.type === "iframe"
             )
-            const ptbrSource = megaplaySource || ptbrIframeSource || filteredSources.find((s: { hasPTBR: boolean }) => s.hasPTBR)
             
-            if (ptbrSource) {
-              selectedSource = ptbrSource
-              setSelectedProvider(ptbrSource.providerId)
+            // Select best source: HLS preferred, then iframe as fallback
+            const bestSource = ptbrHlsSource || hlsSource || megaplaySource || ptbrIframeSource || filteredSources[0]
+            
+            if (bestSource) {
+              selectedSource = bestSource
+              setSelectedProvider(bestSource.providerId)
             } else if (filteredSources[0]) {
               setSelectedProvider(filteredSources[0].providerId)
             }

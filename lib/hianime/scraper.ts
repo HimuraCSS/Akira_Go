@@ -85,10 +85,18 @@ export async function searchAnime(query: string, page: number = 1): Promise<{
   
   $(".film_list-wrap .flw-item").each((_, el) => {
     const $el = $(el)
-    const id = $el.find(".film-poster a").attr("href")?.replace("/", "") || ""
-    const name = $el.find(".film-name a").text().trim()
+    // HiAnime now uses absolute URLs like https://hianime.ms/details/one-piece-1a877
+    const fullUrl = $el.find(".film-poster a.film-poster-ahref").attr("href") || 
+                    $el.find(".film-poster a").attr("href") || ""
+    // Extract ID from full URL or relative path
+    const id = fullUrl.replace(/https?:\/\/[^/]+\/details\//, "").replace(/^\//, "") || ""
+    
+    const name = $el.find(".film-name a").text().trim() ||
+                 $el.find(".film-poster a").attr("aria-label")?.replace("Watch ", "") || ""
     const jname = $el.find(".film-name a").attr("data-jname") || ""
-    const poster = $el.find(".film-poster img").attr("data-src") || ""
+    // HiAnime now uses src directly instead of data-src for lazy loading
+    const poster = $el.find(".film-poster img").attr("src") || 
+                   $el.find(".film-poster img").attr("data-src") || ""
     const duration = $el.find(".fd-infor .fdi-item.fdi-duration").text().trim()
     const type = $el.find(".fd-infor .fdi-item:first-child").text().trim()
     const rating = $el.find(".film-poster .tick-rate").text().trim()
@@ -118,13 +126,19 @@ export async function searchAnime(query: string, page: number = 1): Promise<{
 
 // Get anime info
 export async function getAnimeInfo(animeId: string): Promise<AnimeInfo | null> {
-  const url = `${HIANIME_BASE_URL}/${animeId}`
+  // HiAnime now uses /details/ prefix for anime pages
+  const url = `${HIANIME_BASE_URL}/details/${animeId}`
   
+  console.log("[v0] Fetching anime info from:", url)
   const res = await fetch(url, { headers: DEFAULT_HEADERS })
+  console.log("[v0] Response status:", res.status)
   const html = await res.text()
+  console.log("[v0] HTML length:", html.length)
   const $ = cheerio.load(html)
   
-  const name = $(".anisc-detail .film-name").text().trim()
+  // Updated selector: h1.film-name or .anisc-detail .film-name
+  const name = $("h1.film-name").text().trim() || $(".anisc-detail .film-name").text().trim()
+  console.log("[v0] Found name:", name)
   if (!name) return null
   
   const jname = $(".anisc-detail .film-name").attr("data-jname") || ""
