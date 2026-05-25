@@ -112,89 +112,6 @@ async function getSlugMappings(malId: number): Promise<Map<string, string>> {
   return slugMap
 }
 
-// Get sources from slug-based providers (UniqueStream only - ReAnime has Cloudflare)
-function getSlugBasedSources(
-  malId: number,
-  episode: number,
-  title: string,
-  titleEnglish: string | undefined,
-  slugMappings: Map<string, string>
-): UnifiedSource[] {
-  const sources: UnifiedSource[] = []
-  
-  // Only UniqueStream works reliably - ReAnime has Cloudflare protection
-  const slugProviders: Array<{
-    id: string
-    name: string
-    provider: Provider
-    languages: string[]
-    hasPTBR: boolean
-    type: 'sub' | 'dub'
-    quality: string
-    notes: string
-  }> = [
-    {
-      id: "uniquestream-sub",
-      name: "UniqueStream Multi-Dub",
-      provider: "uniquestream",
-      languages: ["Portuguese", "English", "Spanish", "German", "French", "Italian", "Hindi", "Arabic", "Japanese"],
-      hasPTBR: true,
-      type: "sub",
-      quality: "FHD",
-      notes: "12+ idiomas de audio incluindo PT-BR!"
-    },
-    // ReAnime removed - Cloudflare protected, shows "Failed to fetch" errors
-  ]
-  
-  for (const providerInfo of slugProviders) {
-    // Get slug from database or generate from title
-    let slug = slugMappings.get(providerInfo.provider)
-    
-    if (!slug) {
-      // Generate slug from title
-      slug = titleToSlug(titleEnglish || title)
-      
-      // Save generated slug to database (async, don't wait)
-      supabase
-        .from("anime_slug_mappings")
-        .upsert({
-          mal_id: malId,
-          title: title,
-          title_english: titleEnglish || null,
-          provider: providerInfo.provider,
-          slug: slug,
-          verified: false,
-        }, { onConflict: "mal_id,provider" })
-        .then(() => {})
-        .catch((e) => console.error("Error saving slug:", e))
-    }
-    
-    // Generate URL
-    const url = generateProviderUrl(
-      providerInfo.provider,
-      slug,
-      episode,
-      providerInfo.type
-    )
-    
-    if (url) {
-      sources.push({
-        id: `slug-${providerInfo.id}`,
-        name: providerInfo.name,
-        quality: providerInfo.quality,
-        url,
-        isM3U8: false,
-        type: "iframe", // These are external embeds
-        provider: providerInfo.provider,
-        hasSubtitles: true,
-        subtitleLanguages: providerInfo.languages,
-      })
-    }
-  }
-  
-  return sources
-}
-
 // Search and get HiAnime episode info
 async function getHiAnimeEpisodeInfo(
   animeTitle: string, 
@@ -357,23 +274,13 @@ export async function GET(request: Request) {
       subtitles: [],
     }
     
-    // Fetch slug mappings from database in parallel with other operations
-    const slugMappingsPromise = malId ? getSlugMappings(malId) : Promise.resolve(new Map<string, string>())
-    
     // 1. Get iframe sources (fast, always available)
     if (malId) {
       const iframeSources = getIframeSources(malId, anilistId, episode, slug)
       response.sources.push(...iframeSources)
     }
     
-    // 2. Get slug-based provider sources (UniqueStream, ReAnime, etc.)
-    if (malId && title && includeSlugProviders) {
-      const slugMappings = await slugMappingsPromise
-      const slugSources = getSlugBasedSources(malId, episode, title, titleEnglish, slugMappings)
-      response.sources.push(...slugSources)
-    }
-    
-    // 3. Get HLS sources with subtitles (requires search, but has PT-BR subs)
+    // 2. Get HLS sources with subtitles (requires search, but has PT-BR subs)
     if (title) {
       const hiAnimeInfo = await getHiAnimeEpisodeInfo(title, episode)
       
