@@ -169,6 +169,46 @@ export const BR_ANIME_PROVIDERS: AnimeProvider[] = [
   },
   
   // ============================================================
+  // TIER 1.4: REANIME - CLEAN INTERFACE (Cloudflare protected)
+  // ============================================================
+  // ReAnime tem interface limpa, sem ads, AV1 support, 1080p HD
+  // Usa Cloudflare protection - scraping direto nao funciona
+  // Mas pode ser usado como referencia de qualidade
+  
+  {
+    id: "reanime-sub",
+    name: "ReAnime SUB",
+    shortName: "ReA",
+    status: "cloudflare", // Cloudflare protection
+    languages: ["English", "Japanese"],
+    hasPTBR: false, // Legendas EN
+    hasDub: false,
+    hasSub: true,
+    priority: 20, // Lower priority due to CF
+    type: "scraper",
+    embedPattern: "https://reanime.to/watch/{slug}?ep={episode}&lang=sub&server=HD-1",
+    quality: "FHD",
+    adFree: true,
+    notes: "CLOUDFLARE - Interface limpa, AV1 support, 1080p, AniList sync"
+  },
+  {
+    id: "reanime-dub",
+    name: "ReAnime DUB",
+    shortName: "ReADub",
+    status: "cloudflare",
+    languages: ["English"],
+    hasPTBR: false,
+    hasDub: true,
+    hasSub: false,
+    priority: 21,
+    type: "scraper",
+    embedPattern: "https://reanime.to/watch/{slug}?ep={episode}&lang=dub&server=HD-1",
+    quality: "FHD",
+    adFree: true,
+    notes: "CLOUDFLARE - Áudio EN, interface limpa"
+  },
+  
+  // ============================================================
   // TIER 1.5: HLS PROVIDERS COM LEGENDAS MULTILÍNGUES (CC/Softsub)
   // ============================================================
   // Estes providers retornam streams HLS (M3U8) com legendas VTT separadas
