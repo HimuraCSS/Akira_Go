@@ -104,6 +104,71 @@ export const BR_ANIME_PROVIDERS: AnimeProvider[] = [
   },
   
   // ============================================================
+  // TIER 1.2: VIDNEST - MULTI-LANGUAGE EMBED (Tested 2026-05-25)
+  // ============================================================
+  // VidNest funciona perfeitamente com iframes
+  // Suporta sub/dub e vários idiomas de áudio
+  // Usa AniList ID (que é igual ao MAL ID para maioria dos animes)
+  
+  {
+    id: "vidnest-sub",
+    name: "VidNest SUB",
+    shortName: "VNest",
+    status: "online",
+    languages: ["English", "Japanese"],
+    hasPTBR: false, // Legendas EN
+    hasDub: false,
+    hasSub: true,
+    priority: 5,
+    type: "iframe",
+    embedPattern: "https://vidnest.fun/anime/{malId}/{episode}/sub",
+    quality: "FHD",
+    adFree: true,
+    notes: "VERIFIED - Player limpo, Skip 10s, legendas EN softsub"
+  },
+  {
+    id: "vidnest-dub",
+    name: "VidNest DUB",
+    shortName: "VNestDub",
+    status: "online",
+    languages: ["English"],
+    hasPTBR: false,
+    hasDub: true,
+    hasSub: false,
+    priority: 6,
+    type: "iframe",
+    embedPattern: "https://vidnest.fun/anime/{malId}/{episode}/dub",
+    quality: "FHD",
+    adFree: true,
+    notes: "VERIFIED - Áudio EN dublado, player limpo"
+  },
+  
+  // ============================================================
+  // TIER 1.3: UNIQUESTREAM - MULTI-DUB (12+ idiomas de áudio!)
+  // ============================================================
+  // UniqueStream tem áudio dublado em MUITOS idiomas:
+  // Japanese, Arabic, Portuguese (Brazil), Spanish (Spain), German,
+  // Tamil, English, Spanish (Latin America), Hindi, Telugu, Italian, French
+  // Requer slug do anime, não MAL ID direto
+  
+  {
+    id: "uniquestream",
+    name: "UniqueStream",
+    shortName: "UStream",
+    status: "online",
+    languages: ["Portuguese", "English", "Spanish", "German", "French", "Italian", "Hindi", "Arabic", "Japanese"],
+    hasPTBR: true, // TEM ÁUDIO DUBLADO PT-BR!
+    hasDub: true,
+    hasSub: true,
+    priority: 7,
+    type: "scraper", // Precisa de slug, não ID direto
+    embedPattern: "https://anime.uniquestream.net/watch/{slug}",
+    quality: "FHD",
+    adFree: false,
+    notes: "MULTI-DUB - 12+ idiomas de áudio incluindo PT-BR! Requer slug"
+  },
+  
+  // ============================================================
   // TIER 1.5: HLS PROVIDERS COM LEGENDAS MULTILÍNGUES (CC/Softsub)
   // ============================================================
   // Estes providers retornam streams HLS (M3U8) com legendas VTT separadas

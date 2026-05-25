@@ -46,10 +46,10 @@ function getIframeSources(
 ): UnifiedSource[] {
   const sources: UnifiedSource[] = []
   
-  // Get top iframe providers
+  // Get top iframe providers (increased to 10 for more options)
   const iframeProviders = BR_ANIME_PROVIDERS
     .filter(p => p.status === "online" && p.type === "iframe")
-    .slice(0, 6) // Top 6 iframe providers
+    .slice(0, 10) // Top 10 iframe providers
   
   for (const provider of iframeProviders) {
     // generateEmbedUrl expects providerId as first param
