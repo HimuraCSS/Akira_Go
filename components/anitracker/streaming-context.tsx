@@ -443,7 +443,7 @@ export function StreamingProvider({ children }: { children: ReactNode }) {
     }
   }, [state.activeProvider])
 
-  // Play a specific episode - fetches stream URL from Consumet
+  // Play a specific episode - fetches stream URL from unified API
   const playEpisode = useCallback(async (episode: Episode) => {
     setState(prev => ({
       ...prev,
@@ -454,9 +454,97 @@ export function StreamingProvider({ children }: { children: ReactNode }) {
       streamUrl: null,
       availableSources: [],
       error: null,
+      subtitles: [],
+      activeSubtitle: null,
     }))
 
     try {
+      // First try the unified API that combines iframe + HLS with subtitles
+      const params = new URLSearchParams({
+        title: episode.animeTitle,
+        episode: episode.number.toString(),
+      })
+      
+      // Add MAL ID if available
+      if (episode.malId) {
+        params.append("malId", episode.malId.toString())
+      }
+      
+      // Prefer iframe by default for stability
+      params.append("preferIframe", "true")
+      
+      const unifiedResponse = await fetch(`/api/stream/unified?${params}`)
+      
+      if (unifiedResponse.ok) {
+        const unifiedData = await unifiedResponse.json()
+        
+        if (unifiedData.success && unifiedData.data) {
+          const { sources, subtitles, intro, outro, recommendedSource } = unifiedData.data
+          
+          // Convert to our StreamSource format
+          const streamSources: StreamSource[] = sources.map((source: {
+            id: string
+            name: string
+            quality: string
+            url: string
+            isM3U8: boolean
+            type: "iframe" | "hls" | "mp4"
+            provider: string
+            hasSubtitles: boolean
+          }) => ({
+            id: source.id,
+            name: source.name,
+            quality: source.quality,
+            url: source.url,
+            isM3U8: source.isM3U8,
+            status: "active" as const,
+            type: source.type,
+          }))
+          
+          // Convert subtitles
+          const streamSubtitles: Subtitle[] = subtitles.map((sub: {
+            url: string
+            lang: string
+            label: string
+            isPTBR: boolean
+          }) => ({
+            url: sub.url,
+            lang: sub.lang,
+            label: sub.label,
+          }))
+          
+          // Find the recommended source or first available
+          const currentSource = recommendedSource 
+            ? streamSources.find(s => s.id === recommendedSource.id) || streamSources[0]
+            : streamSources[0]
+          
+          // Auto-select PT-BR subtitle if available
+          const ptbrSubtitle = streamSubtitles.find(s => 
+            /portugu[eê]s|portuguese|pt-br|pt_br|brazil/i.test(s.lang)
+          )
+          
+          setState(prev => ({
+            ...prev,
+            availableSources: streamSources,
+            currentSource,
+            streamUrl: currentSource?.url || null,
+            isLoadingStream: false,
+            isBuffering: false,
+            hlsReady: true,
+            isPlaying: true,
+            intro,
+            outro,
+            subtitles: streamSubtitles,
+            activeSubtitle: ptbrSubtitle || null,
+          }))
+          
+          return
+        }
+      }
+      
+      // Fallback to original Consumet API if unified fails
+      console.log("[Streaming] Unified API failed, falling back to Consumet")
+      
       // If we don't have the consumet episode ID, we need to load the anime first
       let consumetEpisodeId = episode.consumetEpisodeId
 

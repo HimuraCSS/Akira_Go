@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 import { updateWatchHistory } from "@/lib/watch-history"
+import { HLSPlayer } from "@/components/hls-player"
 
 interface AnimeData {
   mal_id: number
@@ -91,9 +92,11 @@ export default function WatchPage() {
     providerName: string
     hasPTBR: boolean
     hasDub: boolean
+    type?: "iframe" | "hls" | "mp4"
   }>>([])
   const [selectedProvider, setSelectedProvider] = useState<string>("")
   const [showProviders, setShowProviders] = useState(false)
+  const [playerMode, setPlayerMode] = useState<"iframe" | "hls">("iframe")
 
   // Fetch anime data
   useEffect(() => {
@@ -132,22 +135,47 @@ export default function WatchPage() {
       
       try {
         const type = selectedSub === "dub" ? "dub" : "sub"
-        const res = await fetch(
-          `/api/addon/stream?title=${encodeURIComponent(anime.title)}&episode=${currentEpisode}&type=${type}&ptbr=true`
-        )
+        
+        // Use the new unified API that combines iframe + HLS sources
+        const params = new URLSearchParams({
+          malId: anime.mal_id.toString(),
+          title: anime.title,
+          episode: currentEpisode.toString(),
+          preferIframe: "true" // Default to iframe for stability
+        })
+        
+        const res = await fetch(`/api/stream/unified?${params}`)
         const data = await res.json()
         
-        if (data.success && data.sources?.length > 0) {
+        if (data.success && data.data?.sources?.length > 0) {
           // Filter sources based on sub/dub selection
-          let filteredSources = data.sources
+          let filteredSources = data.data.sources.map((source: {
+            id: string
+            name: string
+            quality: string
+            url: string
+            type: "iframe" | "hls" | "mp4"
+            provider: string
+            hasSubtitles: boolean
+            subtitleLanguages?: string[]
+          }) => ({
+            url: source.url,
+            quality: source.quality,
+            providerId: source.id,
+            providerName: source.name,
+            hasPTBR: source.hasSubtitles && (source.subtitleLanguages?.some(
+              (l: string) => /portugu[eê]s|portuguese|pt-br|brazil/i.test(l)
+            ) || source.provider.includes("anitube") || source.provider.includes("betteranime")),
+            hasDub: source.provider.includes("dub") || source.name.toLowerCase().includes("dub"),
+            type: source.type,
+          }))
+          
           if (selectedSub === "dub") {
             // For dub, only show providers that support dub
-            filteredSources = data.sources.filter((s: { hasDub: boolean }) => s.hasDub)
-          }
-          
-          // If no sources for dub, show all sources with a note
-          if (filteredSources.length === 0) {
-            filteredSources = data.sources
+            const dubSources = filteredSources.filter((s: { hasDub: boolean }) => s.hasDub)
+            if (dubSources.length > 0) {
+              filteredSources = dubSources
+            }
           }
           
           // Store all available sources
@@ -174,8 +202,15 @@ export default function WatchPage() {
               }
             }
           } else {
-            // No provider selected, prefer PT-BR
-            const ptbrSource = filteredSources.find((s: { hasPTBR: boolean }) => s.hasPTBR)
+            // No provider selected, prefer Megaplay (working) then PT-BR iframe
+            const megaplaySource = filteredSources.find(
+              (s: { providerId: string; type: string }) => s.providerId.includes("megaplay") && s.type === "iframe"
+            )
+            const ptbrIframeSource = filteredSources.find(
+              (s: { hasPTBR: boolean; type: string }) => s.hasPTBR && s.type === "iframe"
+            )
+            const ptbrSource = megaplaySource || ptbrIframeSource || filteredSources.find((s: { hasPTBR: boolean }) => s.hasPTBR)
+            
             if (ptbrSource) {
               selectedSource = ptbrSource
               setSelectedProvider(ptbrSource.providerId)
@@ -198,7 +233,20 @@ export default function WatchPage() {
             progress: Math.round((currentEpisode / (anime.episodes || 12)) * 100),
           })
         } else {
-          setAvailableSources([])
+          // Fallback to legacy API if unified fails
+          console.log("[v0] Unified API failed, trying legacy API")
+          const legacyRes = await fetch(
+            `/api/addon/stream?title=${encodeURIComponent(anime.title)}&episode=${currentEpisode}&type=${type}&ptbr=true`
+          )
+          const legacyData = await legacyRes.json()
+          
+          if (legacyData.success && legacyData.sources?.length > 0) {
+            setAvailableSources(legacyData.sources)
+            setStreamUrl(legacyData.sources[0].url)
+            setSelectedProvider(legacyData.sources[0].providerId)
+          } else {
+            setAvailableSources([])
+          }
         }
       } catch (error) {
         console.error("Failed to fetch stream:", error)
@@ -542,13 +590,25 @@ export default function WatchPage() {
             {/* Video Player */}
             <div className="relative aspect-video bg-black/50 backdrop-blur-sm">
               {streamUrl ? (
-                <iframe
-                  key={streamUrl}
-                  src={streamUrl}
-                  className="absolute inset-0 w-full h-full"
-                  allowFullScreen
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
-                />
+                // Detect if current source is HLS (m3u8) or iframe
+                streamUrl.includes(".m3u8") || availableSources.find(s => s.providerId === selectedProvider)?.type === "hls" ? (
+                  // HLS Player
+                  <HLSPlayer
+                    key={streamUrl}
+                    src={streamUrl}
+                    autoplay={autoplay}
+                    className="absolute inset-0 w-full h-full"
+                  />
+                ) : (
+                  // iframe Player
+                  <iframe
+                    key={streamUrl}
+                    src={streamUrl}
+                    className="absolute inset-0 w-full h-full"
+                    allowFullScreen
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
+                  />
+                )
               ) : (
                 <div className="absolute inset-0 flex items-center justify-center">
                   <Loader2 className="w-10 h-10 animate-spin text-primary" />

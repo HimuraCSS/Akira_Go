@@ -83,10 +83,15 @@ export function VideoPlayer() {
       const isDemoSource = currentSource.url?.includes("test-streams.mux.dev") || 
                           currentSource.url?.includes("bitdash-a.akamaihd.net") ||
                           currentSource.url?.includes("plyr.io")
+      
+      // Check if source is iframe type
       const isIframe = currentSource.type === "iframe" || 
                        currentSource.url?.includes("megaplay.buzz") ||
+                       currentSource.url?.includes("animeplay.cfd") ||
                        currentSource.url?.includes("/embed/") ||
-                       currentSource.url?.includes("/stream/mal/")
+                       currentSource.url?.includes("/stream/mal/") ||
+                       currentSource.url?.includes("/stream/ani/") ||
+                       currentSource.id?.startsWith("iframe-")
       
       setIsDemo(isDemoSource)
       setIsIframeSource(isIframe && !isDemoSource)
@@ -290,8 +295,11 @@ export function VideoPlayer() {
     // Don't initialize ArtPlayer for iframe sources
     const isIframe = currentSource?.type === "iframe" || 
                      streamUrl?.includes("megaplay.buzz") ||
+                     streamUrl?.includes("animeplay.cfd") ||
                      streamUrl?.includes("/embed/") ||
-                     streamUrl?.includes("/stream/mal/")
+                     streamUrl?.includes("/stream/mal/") ||
+                     streamUrl?.includes("/stream/ani/") ||
+                     currentSource?.id?.startsWith("iframe-")
     
     if (streamUrl && artRef.current && !isIframe) {
       const isHls = streamUrl.includes(".m3u8") || currentSource?.isM3U8
