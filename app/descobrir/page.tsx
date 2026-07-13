@@ -11,6 +11,7 @@ import { useAnimeSearch, useTopAnime, usePopularAnime } from "@/hooks/use-anime"
 import { useDebounce } from "@/hooks/use-debounce"
 import { fetchAnimeByGenre, fetchRandomAnime, GENRE_IDS } from "@/lib/jikan-api"
 import type { AnimeData } from "@/components/anitracker/anime-card"
+import { MaxunExplorer } from "@/components/anitracker/maxun-explorer"
 
 const GENRES = [
   { id: GENRE_IDS.ACTION, name: "Ação", icon: "⚔️" },
@@ -175,6 +176,8 @@ export default function DiscoverPage() {
         {/* Default Sections */}
         {!showSearchResults && !showGenreResults && (
           <>
+            <MaxunExplorer />
+
             <Section 
               title="Em Alta"
               subtitle="Os mais populares da temporada"
